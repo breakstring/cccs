@@ -11,6 +11,30 @@ pub struct Profile {
     pub is_active: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileInfo {
+    pub id: String,
+    pub display_name: String,
+    pub file_path: String,
+    pub is_default: bool,
+    pub last_modified: SystemTime,
+    pub file_size: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationResult {
+    pub is_valid: bool,
+    pub errors: Vec<ValidationError>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationError {
+    pub line: usize,
+    pub column: usize,
+    pub message: String,
+    pub error_type: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct FileMetadata {
     pub modified_time: SystemTime,

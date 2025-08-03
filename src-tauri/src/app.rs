@@ -406,15 +406,10 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tauri::test::{mock_app, MockRuntime};
-    
-    // Note: These tests would require proper Tauri test setup
-    // For now, we'll test the basic structure
     
     #[test]
-    fn test_app_creation() {
-        // This would need a proper Tauri app handle for real testing
-        // For now, we just test that the types compile correctly
+    fn test_app_structure() {
+        // Simple compilation test for the App structure
         assert!(true);
     }
 }

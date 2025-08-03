@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCCS - Settings</title>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Left Navigation Panel -->
+        <nav class="navigation-panel">
+            <div class="nav-header">
+                <h1 data-i18n="app_name">CCCS</h1>
+            </div>
+            
+            <div class="nav-content">
+                <!-- Profile Navigation List -->
+                <div class="profile-section">
+                    <h3 data-i18n="profiles_section_title">Profiles</h3>
+                    <ul id="profile-nav-list" class="profile-nav-list">
+                        <!-- Profiles will be dynamically loaded here -->
+                    </ul>
+                </div>
+                
+                <!-- About Navigation (bottom aligned) -->
+                <div class="nav-footer">
+                    <div class="nav-item about-nav-item" data-profile-id="about">
+                        <span data-i18n="about_nav_item">About</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Right Content Panel -->
+        <main class="content-panel">
+            <!-- Profile Header -->
+            <header class="content-header">
+                <h2 id="profile-title" data-i18n="current_profile_title">Current</h2>
+            </header>
+            
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- JSON Editor (default view) -->
+                <div id="json-editor-container" class="editor-container">
+                    <div class="editor-header">
+                        <div class="editor-title" data-i18n="json_editor_title">Configuration Editor</div>
+                        <div class="editor-hint" data-i18n="json_editor_hint">Edit your configuration in JSON format</div>
+                    </div>
+                    <textarea id="json-editor" class="json-editor" spellcheck="false" data-i18n-placeholder="json_editor_placeholder">Loading...</textarea>
+                    
+                    <!-- Editor Controls -->
+                    <div class="editor-controls">
+                        <button id="save-button" class="primary-button" data-i18n="save_button">
+                            <span class="button-icon">💾</span>
+                            <span class="button-text">Save</span>
+                        </button>
+                        <button id="save-as-button" class="secondary-button" data-i18n="save_as_button">
+                            <span class="button-icon">📄</span>
+                            <span class="button-text">Save As...</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- About Content (hidden by default) -->
+                <div id="about-container" class="about-container" style="display: none;">
+                    <!-- Application Information -->
+                    <section class="info-section">
+                        <h2 data-i18n="app_info_title">Application Information</h2>
+                        <div class="separator"></div>
+                        <p data-i18n="app_description">
+                            CCCS (Claude Code Configuration Switcher) is a tool for quickly switching Claude Code configuration files.
+                        </p>
+                    </section>
+                    
+                    <!-- Profile Status Icons -->
+                    <section class="status-icons-section">
+                        <h2 data-i18n="status_icons_title">Profile Status Icons</h2>
+                        <div class="separator"></div>
+                        
+                        <div class="status-icon-item">
+                            <span class="status-icon">✅</span>
+                            <span class="status-description" data-i18n="full_match_description">Complete match - configuration fully matches current settings</span>
+                        </div>
+                        
+                        <div class="status-icon-item">
+                            <span class="status-icon">🔄</span>
+                            <span class="status-description" data-i18n="partial_match_description">Partial match - identical except model field (auto-updated by Claude Code)</span>
+                        </div>
+                        
+                        <div class="status-icon-item">
+                            <span class="status-icon">❌</span>
+                            <span class="status-description" data-i18n="error_status_description">Error - failed to read or parse configuration file</span>
+                        </div>
+                        
+                        <div class="status-icon-item">
+                            <span class="status-icon"></span>
+                            <span class="status-description" data-i18n="no_match_description">No icon - configuration differs from current settings</span>
+                        </div>
+                    </section>
+                    
+                    <!-- Language Settings -->
+                    <section class="settings-section">
+                        <h2 data-i18n="language_settings_title">Language Settings</h2>
+                        <div class="separator"></div>
+                        
+                        <div class="setting-item">
+                            <label for="language-select" data-i18n="interface_language_label">Interface language:</label>
+                            <select id="language-select">
+                                <option value="" data-i18n="follow_system">Follow system</option>
+                                <option value="zh" data-i18n="chinese">中文</option>
+                                <option value="en" data-i18n="english">English</option>
+                            </select>
+                        </div>
+                    </section>
+                    
+                    <!-- Current Status -->
+                    <section class="status-section">
+                        <h2 data-i18n="current_status_title">Current Status</h2>
+                        <div class="separator"></div>
+                        
+                        <div class="status-item">
+                            <span class="status-label" data-i18n="claude_directory_label">Claude Code directory:</span>
+                            <span class="status-value" id="claude-directory">~/.claude</span>
+                        </div>
+                    </section>
+
+                    <!-- About Controls -->
+                    <div class="about-controls">
+                        <button id="close-button" class="primary-button" data-i18n="close_button">Close</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Save As Modal -->
+    <div id="save-as-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-i18n="save_as_modal_title">Save As New Profile</h3>
+                <button id="modal-close-button" class="modal-close-button">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="profile-name-input" data-i18n="profile_name_label">Profile Name:</label>
+                    <input type="text" id="profile-name-input" class="profile-name-input" data-i18n-placeholder="profile_name_placeholder" maxlength="255">
+                    <div class="input-hint" data-i18n="profile_name_hint">Profile names cannot contain special characters: / \ : * ? " &lt; &gt; |</div>
+                </div>
+                
+                <div class="form-group">
+                    <label data-i18n="preview_filename_label">Preview:</label>
+                    <div id="filename-preview" class="filename-preview">profile-name.settings.json</div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button id="modal-cancel-button" class="secondary-button" data-i18n="cancel_button">Cancel</button>
+                <button id="modal-save-button" class="primary-button" data-i18n="save_button">Save</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" data-i18n="saving_settings">Saving settings...</div>
+    </div>
+    
+    <!-- Toast notifications -->
+    <div id="toast-container" class="toast-container"></div>
+    
+    <!-- Vite Entry Point -->
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@ mod settings_service;
 mod i18n_service;
 mod error;
 mod types;
+mod validation;
 
 // Performance testing module (only in debug builds)
 #[cfg(debug_assertions)]
@@ -44,7 +45,6 @@ async fn get_profiles_info(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Resu
         }
     };
     
-    // Get config service from app
     let config_service = app.get_config_service();
     let config = match config_service.try_lock() {
         Ok(guard) => guard,
@@ -64,6 +64,231 @@ async fn get_profiles_info(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Resu
         profiles_count: profiles.len(),
         monitor_status: "inactive".to_string(),
     })
+}
+
+#[tauri::command]
+async fn get_profiles_list(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Result<Vec<ProfileInfo>, String> {
+    log::info!("get_profiles_list called");
+    
+    let app = match app_state.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock app state: {}", e);
+            return Err("Failed to access application state".to_string());
+        }
+    };
+    
+    let config_service = app.get_config_service();
+    let mut config = match config_service.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock config service: {}", e);
+            return Err("Failed to access configuration service".to_string());
+        }
+    };
+    
+    match config.get_all_profiles_info() {
+        Ok(profiles) => {
+            log::info!("Returning {} profiles", profiles.len());
+            Ok(profiles)
+        }
+        Err(e) => {
+            log::error!("Failed to get profiles list: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn get_profile_status(
+    profile_id: String,
+    app_state: tauri::State<'_, Arc<Mutex<App>>>
+) -> Result<String, String> {
+    log::debug!("get_profile_status called for profile: {}", profile_id);
+    
+    if profile_id == "current" {
+        return Ok("".to_string()); // Current profile doesn't have status icon
+    }
+    
+    let app = match app_state.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock app state: {}", e);
+            return Err("Failed to access application state".to_string());
+        }
+    };
+    
+    let config_service = app.get_config_service();
+    let mut config = match config_service.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock config service: {}", e);
+            return Err("Failed to access configuration service".to_string());
+        }
+    };
+    
+    match config.read_profile_content(&profile_id) {
+        Ok(content) => {
+            let status = config.get_detailed_profile_status(&content);
+            let icon = match status {
+                crate::ProfileStatus::FullMatch => "✅",
+                crate::ProfileStatus::PartialMatch => "🔄", 
+                crate::ProfileStatus::Error(_) => "❌",
+                crate::ProfileStatus::NoMatch => "",
+            };
+            Ok(icon.to_string())
+        }
+        Err(e) => {
+            log::error!("Failed to read profile content: {}", e);
+            Ok("❌".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn load_profile_content(
+    profile_id: String,
+    app_state: tauri::State<'_, Arc<Mutex<App>>>
+) -> Result<String, String> {
+    log::info!("load_profile_content called for profile: {}", profile_id);
+    
+    let app = match app_state.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock app state: {}", e);
+            return Err("Failed to access application state".to_string());
+        }
+    };
+    
+    let config_service = app.get_config_service();
+    let mut config = match config_service.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock config service: {}", e);
+            return Err("Failed to access configuration service".to_string());
+        }
+    };
+    
+    match config.read_profile_content(&profile_id) {
+        Ok(content) => {
+            log::info!("Successfully loaded content for profile: {}", profile_id);
+            Ok(content)
+        }
+        Err(e) => {
+            log::error!("Failed to load profile content: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn save_profile(
+    profile_id: String,
+    content: String,
+    app_state: tauri::State<'_, Arc<Mutex<App>>>
+) -> Result<(), String> {
+    log::info!("save_profile called for profile: {}", profile_id);
+    
+    let app = match app_state.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock app state: {}", e);
+            return Err("Failed to access application state".to_string());
+        }
+    };
+    
+    let config_service = app.get_config_service();
+    let mut config = match config_service.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock config service: {}", e);
+            return Err("Failed to access configuration service".to_string());
+        }
+    };
+    
+    match config.save_profile_content(&profile_id, &content) {
+        Ok(()) => {
+            log::info!("Successfully saved profile: {}", profile_id);
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Failed to save profile: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn create_new_profile(
+    profile_name: String,
+    content: String,
+    app_state: tauri::State<'_, Arc<Mutex<App>>>
+) -> Result<String, String> {
+    log::info!("create_new_profile called for profile: {}", profile_name);
+    
+    let app = match app_state.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock app state: {}", e);
+            return Err("Failed to access application state".to_string());
+        }
+    };
+    
+    let config_service = app.get_config_service();
+    let mut config = match config_service.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock config service: {}", e);
+            return Err("Failed to access configuration service".to_string());
+        }
+    };
+    
+    match config.create_profile(&profile_name, &content) {
+        Ok(path) => {
+            log::info!("Successfully created profile: {} at {}", profile_name, path);
+            Ok(path)
+        }
+        Err(e) => {
+            log::error!("Failed to create profile: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn validate_json_content(
+    content: String,
+    app_state: tauri::State<'_, Arc<Mutex<App>>>
+) -> Result<ValidationResult, String> {
+    log::debug!("validate_json_content called");
+    
+    let app = match app_state.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock app state: {}", e);
+            return Err("Failed to access application state".to_string());
+        }
+    };
+    
+    let config_service = app.get_config_service();
+    let config = match config_service.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock config service: {}", e);
+            return Err("Failed to access configuration service".to_string());
+        }
+    };
+    
+    match config.validate_json_content(&content) {
+        Ok(result) => {
+            log::debug!("JSON validation result: valid={}", result.is_valid);
+            Ok(result)
+        }
+        Err(e) => {
+            log::error!("Failed to validate JSON content: {}", e);
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
@@ -93,6 +318,12 @@ pub fn run() {
             i18n_service::get_text,
             i18n_service::get_supported_locales,
             get_profiles_info,
+            get_profiles_list,
+            get_profile_status,
+            load_profile_content,
+            save_profile,
+            create_new_profile,
+            validate_json_content,
             close_settings_window,
         ])
         .run(tauri::generate_context!())

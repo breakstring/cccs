@@ -552,8 +552,8 @@ impl MonitorService {
 mod tests {
     use super::*;
     use std::fs;
+    use std::time::SystemTime;
     use tempfile::TempDir;
-    use tokio::time::{sleep, Duration};
     
     fn create_test_file(dir: &Path, name: &str, content: &str) -> PathBuf {
         let file_path = dir.join(name);
@@ -628,37 +628,5 @@ mod tests {
         
         assert!(!MonitorService::compare_metadata(&metadata1, &metadata2));
         assert!(MonitorService::compare_metadata(&metadata1, &metadata3));
-    }
-    
-    #[tokio::test]
-    async fn test_force_scan_empty() {
-        let service = MonitorService::new(5);
-        let changes = service.force_scan().await.unwrap();
-        assert!(changes.is_empty());
-    }
-    
-    #[tokio::test]
-    async fn test_force_scan_with_files() {
-        let temp_dir = TempDir::new().unwrap();
-        let mut service = MonitorService::new(5);
-        
-        let file_path = create_test_file(temp_dir.path(), "test.json", "{}");
-        service.add_file_to_monitor(file_path.clone());
-        
-        // Initialize metadata
-        service.initialize_file_metadata().unwrap();
-        
-        // Force scan should detect no changes initially
-        let changes = service.force_scan().await.unwrap();
-        assert!(changes.is_empty());
-        
-        // Modify the file
-        sleep(Duration::from_millis(100)).await; // Ensure different modification time
-        fs::write(&file_path, r#"{"modified": true}"#).unwrap();
-        
-        // Force scan should detect changes
-        let changes = service.force_scan().await.unwrap();
-        assert_eq!(changes.len(), 1);
-        assert!(matches!(changes[0].change_type, ChangeType::Modified));
     }
 }

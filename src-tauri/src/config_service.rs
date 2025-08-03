@@ -1,5 +1,6 @@
 // Configuration service for managing Claude Code profiles
-use crate::{AppError, AppResult, Profile, ProfileStatus, FileMetadata};
+use crate::{AppError, AppResult, Profile, ProfileStatus, FileMetadata, ProfileInfo, ValidationResult};
+use crate::validation::JsonValidator;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,6 +22,8 @@ pub struct ConfigService {
     profile_cache: HashMap<PathBuf, ProfileCache>,
     default_settings_cache: Option<(String, SystemTime)>,
     cache_ttl: Duration,
+    // Validation framework
+    validator: JsonValidator,
 }
 
 impl ConfigService {
@@ -33,6 +36,7 @@ impl ConfigService {
             profile_cache: HashMap::new(),
             default_settings_cache: None,
             cache_ttl: Duration::from_secs(60), // 1 minute cache TTL
+            validator: JsonValidator::with_basic_rules(),
         }
     }
     
@@ -674,6 +678,216 @@ impl ConfigService {
     /// Get Claude directory path
     pub fn get_claude_dir(&self) -> &Path {
         &self.claude_dir
+    }
+
+    /// Get all profiles information including Current
+    pub fn get_all_profiles_info(&mut self) -> AppResult<Vec<ProfileInfo>> {
+        // First scan for profiles to ensure we have latest data
+        self.scan_profiles()?;
+        
+        let mut profiles_info = Vec::new();
+        
+        // Add Current profile first
+        let _current_content = match self.get_default_settings_cached() {
+            Ok(content) => content,
+            Err(e) => {
+                log::warn!("Failed to read current settings: {}", e);
+                String::new()
+            }
+        };
+        
+        let current_metadata = self.get_file_metadata(&self.default_settings_path).ok();
+        
+        profiles_info.push(ProfileInfo {
+            id: "current".to_string(),
+            display_name: "Current".to_string(),
+            file_path: self.default_settings_path.to_string_lossy().to_string(),
+            is_default: true,
+            last_modified: current_metadata.as_ref()
+                .map(|m| m.modified_time)
+                .unwrap_or(SystemTime::UNIX_EPOCH),
+            file_size: current_metadata.as_ref()
+                .map(|m| m.size)
+                .unwrap_or(0),
+        });
+        
+        // Add all other profiles
+        for profile in &self.profiles {
+            profiles_info.push(ProfileInfo {
+                id: profile.name.clone(),
+                display_name: profile.name.clone(),
+                file_path: profile.path.to_string_lossy().to_string(),
+                is_default: false,
+                last_modified: self.get_file_metadata(&profile.path)
+                    .map(|m| m.modified_time)
+                    .unwrap_or(SystemTime::UNIX_EPOCH),
+                file_size: self.get_file_metadata(&profile.path)
+                    .map(|m| m.size)
+                    .unwrap_or(0),
+            });
+        }
+        
+        Ok(profiles_info)
+    }
+
+    /// Read profile content by profile ID
+    pub fn read_profile_content(&mut self, profile_id: &str) -> AppResult<String> {
+        if profile_id == "current" {
+            return self.get_default_settings_cached();
+        }
+        
+        // Find the profile and clone the path to avoid borrowing conflicts
+        let profile_path = self.profiles.iter()
+            .find(|p| p.name == profile_id)
+            .map(|p| p.path.clone())
+            .ok_or_else(|| AppError::ConfigError(format!("Profile '{}' not found", profile_id)))?;
+        
+        self.get_file_content_cached(&profile_path)
+    }
+
+    /// Save profile content by profile ID
+    pub fn save_profile_content(&mut self, profile_id: &str, content: &str) -> AppResult<()> {
+        // Validate JSON content first
+        let validation_result = self.validate_json_content(content)?;
+        if !validation_result.is_valid {
+            return Err(AppError::ConfigError("JSON validation failed".to_string()));
+        }
+        
+        if profile_id == "current" {
+            return self.save_current_settings(content);
+        }
+        
+        // Find the profile and clone the path to avoid borrowing conflicts
+        let profile_path = self.profiles.iter()
+            .find(|p| p.name == profile_id)
+            .map(|p| p.path.clone())
+            .ok_or_else(|| AppError::ConfigError(format!("Profile '{}' not found", profile_id)))?;
+        
+        // Save to profile file
+        self.save_to_file(&profile_path, content)?;
+        
+        // Update cache
+        self.profile_cache.remove(&profile_path);
+        
+        Ok(())
+    }
+
+    /// Create a new profile with given name and content
+    pub fn create_profile(&mut self, profile_name: &str, content: &str) -> AppResult<String> {
+        // Validate profile name
+        self.validate_profile_name(profile_name)?;
+        
+        // Validate JSON content
+        let validation_result = self.validate_json_content(content)?;
+        if !validation_result.is_valid {
+            return Err(AppError::ConfigError("JSON validation failed".to_string()));
+        }
+        
+        // Check if profile already exists
+        if self.profiles.iter().any(|p| p.name == profile_name) {
+            return Err(AppError::ConfigError(format!("Profile '{}' already exists", profile_name)));
+        }
+        
+        // Create profile file path
+        let profile_file_name = format!("{}.settings.json", profile_name);
+        let profile_path = self.claude_dir.join(&profile_file_name);
+        
+        // Save to file
+        self.save_to_file(&profile_path, content)?;
+        
+        // Add to profiles list
+        let new_profile = Profile {
+            name: profile_name.to_string(),
+            path: profile_path.clone(),
+            content: content.to_string(),
+            is_active: false,
+        };
+        self.profiles.push(new_profile);
+        
+        // Refresh profile status
+        self.refresh_profile_status()?;
+        
+        Ok(profile_path.to_string_lossy().to_string())
+    }
+
+    /// Validate profile name
+    pub fn validate_profile_name(&self, name: &str) -> AppResult<()> {
+        if name.is_empty() {
+            return Err(AppError::ConfigError("Profile name cannot be empty".to_string()));
+        }
+        
+        if name.len() > 255 {
+            return Err(AppError::ConfigError("Profile name too long (max 255 characters)".to_string()));
+        }
+        
+        // Check for invalid characters
+        let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\0'];
+        if name.chars().any(|c| invalid_chars.contains(&c)) {
+            return Err(AppError::ConfigError(
+                "Profile name contains invalid characters. Avoid: / \\ : * ? \" < > |".to_string()
+            ));
+        }
+        
+        // Check for reserved names
+        let reserved_names = ["current", "settings", "backup"];
+        if reserved_names.contains(&name.to_lowercase().as_str()) {
+            return Err(AppError::ConfigError(
+                format!("'{}' is a reserved name and cannot be used", name)
+            ));
+        }
+        
+        Ok(())
+    }
+
+    /// Validate JSON content using extensible validation framework
+    pub fn validate_json_content(&self, content: &str) -> AppResult<ValidationResult> {
+        self.validator.validate(content)
+    }
+
+    /// Get the names of all active validation rules
+    pub fn get_validation_rules(&self) -> Vec<&'static str> {
+        self.validator.get_rule_names()
+    }
+
+    /// Add custom validation rule (for future extensions)
+    pub fn add_validation_rule(&mut self, rule: Box<dyn crate::validation::ValidationRule>) {
+        self.validator.add_rule(rule);
+    }
+
+    /// Save current settings (settings.json)
+    fn save_current_settings(&self, content: &str) -> AppResult<()> {
+        self.save_to_file(&self.default_settings_path, content)
+    }
+
+    /// Save content to file with atomic operation
+    fn save_to_file(&self, path: &Path, content: &str) -> AppResult<()> {
+        // Validate and normalize JSON
+        let json_value = serde_json::from_str::<serde_json::Value>(content)
+            .map_err(|e| AppError::ConfigError(format!("Invalid JSON content: {}", e)))?;
+        
+        let normalized_content = serde_json::to_string_pretty(&json_value)
+            .map_err(|e| AppError::ConfigError(format!("Failed to serialize JSON: {}", e)))?;
+        
+        // Write to temporary file first
+        let temp_path = path.with_extension("tmp");
+        
+        // Clean up any existing temp file
+        if temp_path.exists() {
+            fs::remove_file(&temp_path)
+                .map_err(|e| AppError::FileSystemError(format!("Failed to clean up temp file: {}", e)))?;
+        }
+        
+        fs::write(&temp_path, &normalized_content)
+            .map_err(|e| AppError::FileSystemError(format!("Failed to write temporary file: {}", e)))?;
+        
+        // Atomic move
+        fs::rename(&temp_path, path)
+            .map_err(|e| {
+                let _ = fs::remove_file(&temp_path);
+                AppError::FileSystemError(format!("Failed to save file: {}", e))
+            })?;
+        
+        Ok(())
     }
 }
 
