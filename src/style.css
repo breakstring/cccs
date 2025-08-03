@@ -435,6 +435,41 @@ body {
     box-shadow: none;
 }
 
+.danger-button {
+    background: #dc3545;
+    color: white;
+    border: 1px solid #dc3545;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 120px;
+    justify-content: center;
+}
+
+.danger-button:hover:not(:disabled) {
+    background: #c82333;
+    border-color: #c82333;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2);
+}
+
+.danger-button:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.danger-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
 .button-icon {
     font-size: 16px;
 }
@@ -753,7 +788,7 @@ body {
 
 .view-content {
     flex: 1;
-    overflow: hidden;
+    overflow-y: auto;
     padding: 24px;
     display: flex;
     flex-direction: column;
@@ -877,6 +912,28 @@ body {
 
 .alert-modal .modal-footer {
     justify-content: center;
+}
+
+.delete-confirm-modal {
+    max-width: 400px;
+    min-width: 350px;
+}
+
+.delete-confirm-modal .modal-body {
+    text-align: center;
+    padding: 20px 24px;
+}
+
+.delete-confirm-modal .modal-body p {
+    margin-bottom: 10px;
+    line-height: 1.5;
+    color: #495057;
+}
+
+.delete-confirm-modal .modal-body strong {
+    color: #dc3545;
+    font-weight: 600;
+    font-size: 15px;
 }
 
 /* About Content Sections */

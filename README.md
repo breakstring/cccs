@@ -75,7 +75,20 @@ CCCS automatically scans for configuration files in your Claude Code directory (
 3. **Switch Profiles**: Right-click the tray icon and select your desired profile
 4. **Monitor Status**: Hover over the tray icon to refresh profile status
 
-### Configuration
+### Configuration Editor
+
+![Configuration Editor](./images/edit.png)
+
+*CCCS configuration editor for modifying profile settings*
+
+CCCS includes a built-in configuration editor that allows you to modify profile settings directly within the application:
+
+- **JSON Editor**: Edit configuration files in JSON format with syntax highlighting
+- **Real-time Validation**: Automatic validation of JSON syntax and structure
+- **Profile Management**: Create, edit, and save configuration profiles
+- **Safe Editing**: All changes are validated before being applied
+
+### Settings
 
 ![Settings Page](./images/settings.png)
 
@@ -146,8 +159,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Roadmap
 
-- [ ] Profile Configuration Editor
+- [x] Profile Configuration Editor
 - [x] Custom Icon Support
+- [ ] JSON Schema Validation for Configuration Files
 
 ## Support
 

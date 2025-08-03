@@ -3,11 +3,11 @@
 mod app;
 mod claude_detector;
 mod config_service;
-mod tray_service;
+mod error;
+mod i18n_service;
 mod monitor_service;
 mod settings_service;
-mod i18n_service;
-mod error;
+mod tray_service;
 mod types;
 mod validation;
 
@@ -21,10 +21,10 @@ pub use types::*;
 
 pub type AppResult<T> = Result<T, AppError>;
 
-use tauri::{AppHandle, Manager};
+use app::App;
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
-use app::App;
+use tauri::{AppHandle, Manager};
 
 #[derive(Serialize)]
 struct ProfilesInfo {
@@ -34,9 +34,11 @@ struct ProfilesInfo {
 }
 
 #[tauri::command]
-async fn get_profiles_info(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Result<ProfilesInfo, String> {
+async fn get_profiles_info(
+    app_state: tauri::State<'_, Arc<Mutex<App>>>,
+) -> Result<ProfilesInfo, String> {
     log::info!("get_profiles_info called");
-    
+
     let app = match app_state.try_lock() {
         Ok(guard) => guard,
         Err(e) => {
@@ -44,7 +46,7 @@ async fn get_profiles_info(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Resu
             return Err("Failed to access application state".to_string());
         }
     };
-    
+
     let config_service = app.get_config_service();
     let config = match config_service.try_lock() {
         Ok(guard) => guard,
@@ -53,12 +55,16 @@ async fn get_profiles_info(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Resu
             return Err("Failed to access configuration service".to_string());
         }
     };
-    
+
     let profiles = config.get_profiles();
     let claude_dir = config.get_claude_dir();
-    
-    log::info!("Returning profiles info: {} profiles found in {}", profiles.len(), claude_dir.display());
-    
+
+    log::info!(
+        "Returning profiles info: {} profiles found in {}",
+        profiles.len(),
+        claude_dir.display()
+    );
+
     Ok(ProfilesInfo {
         claude_directory: claude_dir.to_string_lossy().to_string(),
         profiles_count: profiles.len(),
@@ -67,9 +73,11 @@ async fn get_profiles_info(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Resu
 }
 
 #[tauri::command]
-async fn get_profiles_list(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Result<Vec<ProfileInfo>, String> {
+async fn get_profiles_list(
+    app_state: tauri::State<'_, Arc<Mutex<App>>>,
+) -> Result<Vec<ProfileInfo>, String> {
     log::info!("get_profiles_list called");
-    
+
     let app = match app_state.try_lock() {
         Ok(guard) => guard,
         Err(e) => {
@@ -77,7 +85,7 @@ async fn get_profiles_list(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Resu
             return Err("Failed to access application state".to_string());
         }
     };
-    
+
     let config_service = app.get_config_service();
     let mut config = match config_service.try_lock() {
         Ok(guard) => guard,
@@ -86,7 +94,7 @@ async fn get_profiles_list(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Resu
             return Err("Failed to access configuration service".to_string());
         }
     };
-    
+
     match config.get_all_profiles_info() {
         Ok(profiles) => {
             log::info!("Returning {} profiles", profiles.len());
@@ -102,14 +110,14 @@ async fn get_profiles_list(app_state: tauri::State<'_, Arc<Mutex<App>>>) -> Resu
 #[tauri::command]
 async fn get_profile_status(
     profile_id: String,
-    app_state: tauri::State<'_, Arc<Mutex<App>>>
+    app_state: tauri::State<'_, Arc<Mutex<App>>>,
 ) -> Result<String, String> {
     log::debug!("get_profile_status called for profile: {}", profile_id);
-    
+
     if profile_id == "current" {
         return Ok("".to_string()); // Current profile doesn't have status icon
     }
-    
+
     let app = match app_state.try_lock() {
         Ok(guard) => guard,
         Err(e) => {
@@ -117,7 +125,7 @@ async fn get_profile_status(
             return Err("Failed to access application state".to_string());
         }
     };
-    
+
     let config_service = app.get_config_service();
     let mut config = match config_service.try_lock() {
         Ok(guard) => guard,
@@ -126,13 +134,13 @@ async fn get_profile_status(
             return Err("Failed to access configuration service".to_string());
         }
     };
-    
+
     match config.read_profile_content(&profile_id) {
         Ok(content) => {
             let status = config.get_detailed_profile_status(&content);
             let icon = match status {
                 crate::ProfileStatus::FullMatch => "✅",
-                crate::ProfileStatus::PartialMatch => "🔄", 
+                crate::ProfileStatus::PartialMatch => "🔄",
                 crate::ProfileStatus::Error(_) => "❌",
                 crate::ProfileStatus::NoMatch => "",
             };
@@ -148,10 +156,10 @@ async fn get_profile_status(
 #[tauri::command]
 async fn load_profile_content(
     profile_id: String,
-    app_state: tauri::State<'_, Arc<Mutex<App>>>
+    app_state: tauri::State<'_, Arc<Mutex<App>>>,
 ) -> Result<String, String> {
     log::info!("load_profile_content called for profile: {}", profile_id);
-    
+
     let app = match app_state.try_lock() {
         Ok(guard) => guard,
         Err(e) => {
@@ -159,7 +167,7 @@ async fn load_profile_content(
             return Err("Failed to access application state".to_string());
         }
     };
-    
+
     let config_service = app.get_config_service();
     let mut config = match config_service.try_lock() {
         Ok(guard) => guard,
@@ -168,7 +176,7 @@ async fn load_profile_content(
             return Err("Failed to access configuration service".to_string());
         }
     };
-    
+
     match config.read_profile_content(&profile_id) {
         Ok(content) => {
             log::info!("Successfully loaded content for profile: {}", profile_id);
@@ -185,10 +193,10 @@ async fn load_profile_content(
 async fn save_profile(
     profile_id: String,
     content: String,
-    app_state: tauri::State<'_, Arc<Mutex<App>>>
+    app_state: tauri::State<'_, Arc<Mutex<App>>>,
 ) -> Result<(), String> {
     log::info!("save_profile called for profile: {}", profile_id);
-    
+
     let app = match app_state.try_lock() {
         Ok(guard) => guard,
         Err(e) => {
@@ -196,7 +204,7 @@ async fn save_profile(
             return Err("Failed to access application state".to_string());
         }
     };
-    
+
     let config_service = app.get_config_service();
     let mut config = match config_service.try_lock() {
         Ok(guard) => guard,
@@ -205,7 +213,7 @@ async fn save_profile(
             return Err("Failed to access configuration service".to_string());
         }
     };
-    
+
     match config.save_profile_content(&profile_id, &content) {
         Ok(()) => {
             log::info!("Successfully saved profile: {}", profile_id);
@@ -222,10 +230,10 @@ async fn save_profile(
 async fn create_new_profile(
     profile_name: String,
     content: String,
-    app_state: tauri::State<'_, Arc<Mutex<App>>>
+    app_state: tauri::State<'_, Arc<Mutex<App>>>,
 ) -> Result<String, String> {
     log::info!("create_new_profile called for profile: {}", profile_name);
-    
+
     let app = match app_state.try_lock() {
         Ok(guard) => guard,
         Err(e) => {
@@ -233,7 +241,7 @@ async fn create_new_profile(
             return Err("Failed to access application state".to_string());
         }
     };
-    
+
     let config_service = app.get_config_service();
     let mut config = match config_service.try_lock() {
         Ok(guard) => guard,
@@ -242,7 +250,7 @@ async fn create_new_profile(
             return Err("Failed to access configuration service".to_string());
         }
     };
-    
+
     match config.create_profile(&profile_name, &content) {
         Ok(path) => {
             log::info!("Successfully created profile: {} at {}", profile_name, path);
@@ -256,12 +264,12 @@ async fn create_new_profile(
 }
 
 #[tauri::command]
-async fn validate_json_content(
-    content: String,
-    app_state: tauri::State<'_, Arc<Mutex<App>>>
-) -> Result<ValidationResult, String> {
-    log::debug!("validate_json_content called");
-    
+async fn delete_profile(
+    profile_id: String,
+    app_state: tauri::State<'_, Arc<Mutex<App>>>,
+) -> Result<(), String> {
+    log::info!("delete_profile called for profile: {}", profile_id);
+
     let app = match app_state.try_lock() {
         Ok(guard) => guard,
         Err(e) => {
@@ -269,7 +277,43 @@ async fn validate_json_content(
             return Err("Failed to access application state".to_string());
         }
     };
-    
+
+    let config_service = app.get_config_service();
+    let mut config = match config_service.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock config service: {}", e);
+            return Err("Failed to access configuration service".to_string());
+        }
+    };
+
+    match config.delete_profile(&profile_id) {
+        Ok(()) => {
+            log::info!("Successfully deleted profile: {}", profile_id);
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Failed to delete profile: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn validate_json_content(
+    content: String,
+    app_state: tauri::State<'_, Arc<Mutex<App>>>,
+) -> Result<ValidationResult, String> {
+    log::debug!("validate_json_content called");
+
+    let app = match app_state.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock app state: {}", e);
+            return Err("Failed to access application state".to_string());
+        }
+    };
+
     let config_service = app.get_config_service();
     let config = match config_service.try_lock() {
         Ok(guard) => guard,
@@ -278,7 +322,7 @@ async fn validate_json_content(
             return Err("Failed to access configuration service".to_string());
         }
     };
-    
+
     match config.validate_json_content(&content) {
         Ok(result) => {
             log::debug!("JSON validation result: valid={}", result.is_valid);
@@ -323,6 +367,7 @@ pub fn run() {
             load_profile_content,
             save_profile,
             create_new_profile,
+            delete_profile,
             validate_json_content,
             close_settings_window,
         ])
@@ -360,15 +405,15 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             log::info!("CCCS app created successfully");
             // Store the app instance
             app.manage(Arc::new(Mutex::new(cccs_app)));
-            
+
             // Defer actual initialization to avoid blocking startup
             let app_handle_clone = app_handle.clone();
             std::thread::spawn(move || {
                 // Add delay to ensure UI is ready
                 std::thread::sleep(std::time::Duration::from_millis(2000));
-                
+
                 log::info!("Starting delayed CCCS initialization");
-                
+
                 // Get the app instance and initialize it
                 if let Some(app_state) = app_handle_clone.try_state::<Arc<Mutex<App>>>() {
                     let rt = tokio::runtime::Runtime::new().unwrap();
