@@ -440,7 +440,7 @@ class ContentEditor {
                 const errorMessages = validationResult.errors.map(e => 
                     `Line ${e.line}, Column ${e.column}: ${e.message}`
                 ).join('\n');
-                alert(`${translations[currentLanguage].validation_error}:\n${errorMessages}`);
+                this.showCustomAlert(`${translations[currentLanguage].validation_error}:\n${errorMessages}`);
                 return;
             }
             
@@ -464,10 +464,77 @@ class ContentEditor {
         }
     }
     
-    showSaveAsModal() {
-        if (window.saveAsModal) {
-            window.saveAsModal.show(this.currentContent);
+    async showSaveAsModal() {
+        // 先验证JSON格式
+        try {
+            const validationResult = await invoke('validate_json_content', { 
+                content: this.currentContent 
+            });
+            
+            if (!validationResult.is_valid) {
+                const errorMessages = validationResult.errors.map(e => 
+                    `Line ${e.line}, Column ${e.column}: ${e.message}`
+                ).join('\n');
+                this.showCustomAlert(`${translations[currentLanguage].validation_error}:\n${errorMessages}`);
+                return;
+            }
+            
+            // JSON格式正确，显示另存为对话框
+            if (window.saveAsModal) {
+                window.saveAsModal.show(this.currentContent);
+            }
+        } catch (error) {
+            console.error('Failed to validate JSON before save as:', error);
+            this.showCustomAlert(translations[currentLanguage].validation_error);
         }
+    }
+    
+    // 自定义警告对话框，使用系统图标
+    showCustomAlert(message) {
+        // 创建自定义对话框
+        const alertModal = document.createElement('div');
+        alertModal.className = 'modal-overlay';
+        alertModal.style.display = 'flex';
+        
+        alertModal.innerHTML = `
+            <div class="modal-content alert-modal">
+                <div class="modal-header">
+                    <div class="alert-icon">⚠️</div>
+                    <h3>${translations[currentLanguage].validation_error || 'Validation Error'}</h3>
+                </div>
+                <div class="modal-body">
+                    <pre class="error-message">${message}</pre>
+                </div>
+                <div class="modal-footer">
+                    <button class="primary-button alert-ok-button">OK</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(alertModal);
+        
+        // 添加事件监听
+        const okButton = alertModal.querySelector('.alert-ok-button');
+        okButton.addEventListener('click', () => {
+            document.body.removeChild(alertModal);
+        });
+        
+        // ESC键关闭
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') {
+                document.body.removeChild(alertModal);
+                document.removeEventListener('keydown', handleEsc);
+            }
+        };
+        document.addEventListener('keydown', handleEsc);
+        
+        // 点击背景关闭
+        alertModal.addEventListener('click', (e) => {
+            if (e.target === alertModal) {
+                document.body.removeChild(alertModal);
+                document.removeEventListener('keydown', handleEsc);
+            }
+        });
     }
 }
 
