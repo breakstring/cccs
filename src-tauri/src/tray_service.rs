@@ -77,51 +77,32 @@ impl TrayService {
         }
     }
     
-    /// Load tray-specific icon
+    /// Load tray-specific icon with cross-platform path resolution
     fn load_tray_icon(&self) -> AppResult<tauri::image::Image<'_>> {
         use std::fs;
-        use std::env;
         
-        // Get the base path - different in dev vs production
-        let base_path = if cfg!(debug_assertions) {
-            // Development mode - use project root but avoid double src-tauri
-            let current = env::current_dir().unwrap_or_default();
-            // If we're already in src-tauri, go up one level
-            if current.file_name().and_then(|n| n.to_str()) == Some("src-tauri") {
-                current.parent().unwrap_or(&current).to_path_buf()
-            } else {
-                current
-            }
-        } else {
-            // Production mode - use app resources
-            self.app_handle.path().resource_dir().unwrap_or_default()
-        };
+        // Get base paths for different environments
+        let base_paths = self.get_icon_search_paths();
         
-        // Try to load custom tray icon first (16x16 for better quality on retina displays)
+        // Try to load custom tray icon first (ordered by preference)
         let tray_icon_relative_paths = [
-            "src-tauri/icons/tray/tray-icon-large.png",       // Large icon with small padding (current choice)
-            "src-tauri/icons/tray/tray-icon-xl.png",          // Extra large icon (minimal padding)
-            "src-tauri/icons/tray/tray-icon-large-32.png",    // 32x32 large version
-            "src-tauri/icons/tray/tray-icon-clean-16.png",    // Original clean version
-            "src-tauri/icons/tray/tray-icon-hq-16.png",       // High-quality black version
-            "src-tauri/icons/32x32.png" // fallback to original icon
+            "icons/tray/tray-icon-large.png",       // Large icon with small padding (current choice)
+            "icons/tray/tray-icon-xl.png",          // Extra large icon (minimal padding)
+            "icons/tray/tray-icon-large-32.png",    // 32x32 large version
+            "icons/tray/tray-icon-clean-16.png",    // Original clean version
+            "icons/tray/tray-icon-hq-16.png",       // High-quality black version
+            "icons/32x32.png"                       // fallback to original icon
         ];
         
-        for relative_path in &tray_icon_relative_paths {
-            let icon_path = base_path.join(relative_path);
-            log::debug!("Trying to load tray icon from: {:?}", icon_path);
-            
-            // Try to load the icon data from file
-            match fs::read(&icon_path) {
-                Ok(icon_data) => {
-                    // Try to create image from raw data
-                    match image::load_from_memory(&icon_data) {
-                        Ok(img) => {
-                            let rgba_img = img.to_rgba8();
-                            let (width, height) = rgba_img.dimensions();
-                            let rgba_data = rgba_img.into_raw();
-                            
-                            let tauri_image = tauri::image::Image::new_owned(rgba_data, width, height);
+        // Try each base path with each icon path
+        for base_path in &base_paths {
+            for relative_path in &tray_icon_relative_paths {
+                let icon_path = base_path.join(relative_path);
+                log::debug!("Trying to load tray icon from: {:?}", icon_path);
+                
+                if let Ok(icon_data) = fs::read(&icon_path) {
+                    match self.create_tauri_image_from_data(&icon_data) {
+                        Ok(tauri_image) => {
                             log::info!("Successfully loaded custom tray icon from: {:?}", icon_path);
                             return Ok(tauri_image);
                         }
@@ -130,15 +111,68 @@ impl TrayService {
                             continue;
                         }
                     }
-                }
-                Err(e) => {
-                    log::debug!("Failed to read file {:?}: {}", icon_path, e);
-                    continue;
+                } else {
+                    log::debug!("Failed to read file {:?}", icon_path);
                 }
             }
         }
         
         Err(AppError::TrayError("Could not load any tray icon".to_string()))
+    }
+    
+    /// Get cross-platform icon search paths
+    fn get_icon_search_paths(&self) -> Vec<std::path::PathBuf> {
+        let mut paths = Vec::new();
+        
+        // 1. Try Tauri resource directory first (production)
+        if let Ok(resource_dir) = self.app_handle.path().resource_dir() {
+            paths.push(resource_dir);
+            log::debug!("Added resource directory: {:?}", paths.last());
+        }
+        
+        // 2. Try app data directory
+        if let Ok(app_data_dir) = self.app_handle.path().app_data_dir() {
+            paths.push(app_data_dir);
+            log::debug!("Added app data directory: {:?}", paths.last());
+        }
+        
+        // 3. Development mode: try project structure paths
+        if cfg!(debug_assertions) {
+            if let Ok(current_dir) = std::env::current_dir() {
+                // If we're in src-tauri, go up one level
+                let project_root = if current_dir.file_name()
+                    .and_then(|n| n.to_str()) == Some("src-tauri") {
+                    current_dir.parent().unwrap_or(&current_dir).to_path_buf()
+                } else {
+                    current_dir
+                };
+                
+                // Add project root and src-tauri subdirectory
+                paths.push(project_root.clone());
+                paths.push(project_root.join("src-tauri"));
+                log::debug!("Added development paths: {:?}", &paths[paths.len()-2..]);
+            }
+        }
+        
+        // 4. Fallback: try current executable directory
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                paths.push(exe_dir.to_path_buf());
+                log::debug!("Added executable directory: {:?}", paths.last());
+            }
+        }
+        
+        paths
+    }
+    
+    /// Create Tauri image from raw image data
+    fn create_tauri_image_from_data(&self, icon_data: &[u8]) -> Result<tauri::image::Image<'_>, Box<dyn std::error::Error>> {
+        let img = image::load_from_memory(icon_data)?;
+        let rgba_img = img.to_rgba8();
+        let (width, height) = rgba_img.dimensions();
+        let rgba_data = rgba_img.into_raw();
+        
+        Ok(tauri::image::Image::new_owned(rgba_data, width, height))
     }
     
     /// Create tray with provided icon

@@ -53,9 +53,9 @@ impl MonitorService {
         Ok(())
     }
     
-    /// Add a file to the monitoring list with validation
+    /// Add a file to the monitoring list with enhanced cross-platform validation
     pub fn add_file_to_monitor(&mut self, path: PathBuf) {
-        // Validate file path
+        // Validate file path exists and is accessible
         if !path.exists() {
             log::warn!("Cannot monitor non-existent file: {:?}", path);
             return;
@@ -64,6 +64,17 @@ impl MonitorService {
         if !path.is_file() {
             log::warn!("Cannot monitor non-file path: {:?}", path);
             return;
+        }
+        
+        // Cross-platform file accessibility check
+        match std::fs::File::open(&path) {
+            Ok(_) => {
+                log::debug!("File accessibility confirmed: {:?}", path);
+            }
+            Err(e) => {
+                log::warn!("Cannot access file for monitoring: {:?} - {}", path, e);
+                return;
+            }
         }
         
         // Check file size - don't monitor very large files (>10MB)
@@ -76,12 +87,23 @@ impl MonitorService {
             }
         }
         
-        if !self.monitored_files.contains(&path) {
+        // Check if path is already being monitored (case-insensitive on Windows)
+        let path_already_monitored = if cfg!(target_os = "windows") {
+            // Case-insensitive comparison on Windows
+            self.monitored_files.iter().any(|existing| {
+                existing.to_string_lossy().to_lowercase() == path.to_string_lossy().to_lowercase()
+            })
+        } else {
+            self.monitored_files.contains(&path)
+        };
+        
+        if !path_already_monitored {
             log::info!("Adding file to monitor: {:?}", path);
             self.monitored_files.push(path);
             
-            // Enforce maximum number of monitored files
-            if self.monitored_files.len() > 50 { // Reasonable limit
+            // Enforce maximum number of monitored files for performance
+            const MAX_MONITORED_FILES: usize = 50;
+            if self.monitored_files.len() > MAX_MONITORED_FILES {
                 log::warn!("Too many files being monitored ({}), removing oldest", self.monitored_files.len());
                 let removed = self.monitored_files.remove(0);
                 log::info!("Removed from monitoring: {:?}", removed);
@@ -91,6 +113,11 @@ impl MonitorService {
                     metadata_map.remove(&removed);
                 }
             }
+            
+            // Optimize cache after adding new file
+            self.optimize_metadata_cache();
+        } else {
+            log::debug!("File already being monitored: {:?}", path);
         }
     }
     
@@ -198,7 +225,7 @@ impl MonitorService {
         Ok(())
     }
     
-    /// Optimized scan with better resource management
+    /// Optimized scan with better resource management and cross-platform error handling
     async fn perform_scan_optimized(
         monitored_files: &[PathBuf],
         file_metadata: &Arc<Mutex<HashMap<PathBuf, FileMetadata>>>,
@@ -208,51 +235,109 @@ impl MonitorService {
         
         // Minimize lock time by collecting current metadata first
         let cached_metadata: HashMap<PathBuf, FileMetadata> = {
-            let metadata_map = file_metadata.lock().unwrap();
-            metadata_map.clone()
+            match file_metadata.lock() {
+                Ok(metadata_map) => metadata_map.clone(),
+                Err(e) => {
+                    log::error!("Failed to acquire metadata lock: {}", e);
+                    return Err(AppError::MonitorError("Metadata lock poisoned".to_string()));
+                }
+            }
         };
         
-        for file_path in monitored_files {
-            match Self::scan_single_file(file_path, &cached_metadata).await {
-                Ok(file_changes) => {
-                    changes.extend(file_changes);
+        // Process files in smaller batches to avoid overwhelming the system
+        const BATCH_SIZE: usize = 10;
+        for batch in monitored_files.chunks(BATCH_SIZE) {
+            for file_path in batch {
+                match Self::scan_single_file_with_retry(file_path, &cached_metadata).await {
+                    Ok(file_changes) => {
+                        changes.extend(file_changes);
+                    }
+                    Err(e) => {
+                        scan_errors.push(format!("Error scanning {:?}: {}", file_path, e));
+                    }
                 }
-                Err(e) => {
-                    scan_errors.push(format!("Error scanning {:?}: {}", file_path, e));
-                }
+            }
+            
+            // Small delay between batches to prevent system overload
+            if monitored_files.len() > BATCH_SIZE {
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         }
         
-        // Update metadata cache in batch
+        // Update metadata cache in batch with error handling
         if !changes.is_empty() {
-            let mut metadata_map = file_metadata.lock().unwrap();
-            
-            for change in &changes {
-                match change.change_type {
-                    ChangeType::Created | ChangeType::Modified => {
-                        if let Ok(new_metadata) = Self::get_file_metadata_optimized(&change.file_path) {
-                            metadata_map.insert(change.file_path.clone(), new_metadata);
+            match file_metadata.lock() {
+                Ok(mut metadata_map) => {
+                    for change in &changes {
+                        match change.change_type {
+                            ChangeType::Created | ChangeType::Modified => {
+                                if let Ok(new_metadata) = Self::get_file_metadata_optimized(&change.file_path) {
+                                    metadata_map.insert(change.file_path.clone(), new_metadata);
+                                }
+                            }
+                            ChangeType::Deleted => {
+                                metadata_map.remove(&change.file_path);
+                            }
                         }
                     }
-                    ChangeType::Deleted => {
-                        metadata_map.remove(&change.file_path);
-                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to update metadata cache: {}", e);
+                    // Don't fail the entire scan for cache update errors
                 }
             }
         }
         
-        // Log scan errors but don't fail the entire scan
+        // Log scan errors but don't fail the entire scan unless too many errors
         if !scan_errors.is_empty() {
-            log::warn!("Encountered {} file scan errors:", scan_errors.len());
-            for error in scan_errors.iter().take(5) { // Limit log spam
-                log::warn!("  - {}", error);
-            }
-            if scan_errors.len() > 5 {
-                log::warn!("  ... and {} more errors", scan_errors.len() - 5);
+            let error_rate = scan_errors.len() as f32 / monitored_files.len() as f32;
+            
+            if error_rate > 0.5 {
+                // More than 50% of files failed - this might indicate a system issue
+                log::error!("High error rate during scan: {:.1}% ({}/{})", 
+                    error_rate * 100.0, scan_errors.len(), monitored_files.len());
+                return Err(AppError::MonitorError(format!(
+                    "Too many scan errors: {} out of {} files failed", 
+                    scan_errors.len(), monitored_files.len()
+                )));
+            } else {
+                log::warn!("Encountered {} file scan errors:", scan_errors.len());
+                for error in scan_errors.iter().take(3) { // Limit log spam
+                    log::warn!("  - {}", error);
+                }
+                if scan_errors.len() > 3 {
+                    log::warn!("  ... and {} more errors", scan_errors.len() - 3);
+                }
             }
         }
         
         Ok(changes)
+    }
+    
+    /// Scan single file with retry mechanism for transient errors
+    async fn scan_single_file_with_retry(
+        file_path: &PathBuf,
+        cached_metadata: &HashMap<PathBuf, FileMetadata>,
+    ) -> AppResult<Vec<ConfigFileChange>> {
+        const MAX_RETRIES: u32 = 3;
+        const RETRY_DELAY_MS: u64 = 100;
+        
+        for attempt in 1..=MAX_RETRIES {
+            match Self::scan_single_file(file_path, cached_metadata).await {
+                Ok(changes) => return Ok(changes),
+                Err(e) => {
+                    if attempt < MAX_RETRIES {
+                        log::debug!("Retry {}/{} for file {:?}: {}", attempt, MAX_RETRIES, file_path, e);
+                        tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS * attempt as u64)).await;
+                    } else {
+                        log::warn!("Failed to scan file {:?} after {} attempts: {}", file_path, MAX_RETRIES, e);
+                        return Err(e);
+                    }
+                }
+            }
+        }
+        
+        unreachable!()
     }
     
     /// Scan a single file for changes

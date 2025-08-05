@@ -57,7 +57,7 @@ const translations = {
     profile_name_label: "Profile Name:",
     profile_name_placeholder: "Enter profile name",
     profile_name_hint:
-      'Profile names cannot contain special characters: / \\ : * ? " < > |',
+      'Profile names cannot contain special characters: / \\ : * ? " < > | or start/end with spaces or dots',
     preview_filename_label: "Preview:",
     cancel_button: "Cancel",
     delete_confirm_title: "Confirm Delete",
@@ -118,7 +118,7 @@ const translations = {
     save_as_modal_title: "另存为新的配置文件",
     profile_name_label: "配置文件名:",
     profile_name_placeholder: "输入配置文件名",
-    profile_name_hint: '配置文件名不能包含特殊字符: / \\ : * ? " < > |',
+    profile_name_hint: '配置文件名不能包含特殊字符: / \\ : * ? " < > | 或以空格、点开头/结尾',
     preview_filename_label: "预览:",
     cancel_button: "取消",
     delete_confirm_title: "确认删除",
@@ -146,10 +146,35 @@ let currentLanguage = "en";
 
 // Utility functions
 function detectSystemLanguage() {
-  const lang = navigator.language || navigator.languages[0];
-  if (lang.startsWith("zh")) {
-    return "zh";
+  // Get user's preferred languages in order
+  const languages = navigator.languages || [navigator.language || navigator.userLanguage || 'en'];
+  
+  for (const lang of languages) {
+    if (lang) {
+      const langCode = lang.toLowerCase();
+      
+      // Support various Chinese language codes and regions
+      if (langCode.startsWith('zh') || 
+          langCode.includes('chinese') ||
+          langCode === 'cn' ||
+          langCode.startsWith('zh-cn') ||    // Simplified Chinese (China)
+          langCode.startsWith('zh-sg') ||    // Simplified Chinese (Singapore)
+          langCode.startsWith('zh-tw') ||    // Traditional Chinese (Taiwan)
+          langCode.startsWith('zh-hk') ||    // Traditional Chinese (Hong Kong)
+          langCode.startsWith('zh-mo') ||    // Traditional Chinese (Macau)
+          langCode.startsWith('zh-hans') ||  // Simplified Chinese
+          langCode.startsWith('zh-hant')) {  // Traditional Chinese
+        return "zh";
+      }
+      
+      // Support English variants
+      if (langCode.startsWith('en')) {
+        return "en";
+      }
+    }
   }
+  
+  // Fallback to English if no supported language found
   return "en";
 }
 
@@ -915,15 +940,49 @@ class SaveAsModal {
 
   validateInput() {
     const name = this.profileNameInput.value.trim();
-    const isValid = name.length > 0 && !/[\/\\:*?"<>|]/.test(name);
+    
+    // Enhanced validation to match backend rules
+    let isValid = true;
+    let errorMessage = "";
+    
+    if (name.length === 0) {
+      isValid = false;
+    } else if (name.length > 200) {
+      isValid = false;
+      errorMessage = "Profile name too long (max 200 characters)";
+    } else if (/[\/\\:*?"<>|\0\t\r\n]/.test(name)) {
+      isValid = false;
+      errorMessage = "Contains invalid characters";
+    } else if (name.startsWith(' ') || name.endsWith(' ') || name.startsWith('.') || name.endsWith('.')) {
+      isValid = false;
+      errorMessage = "Cannot start or end with spaces or dots";
+    } else {
+      // Check Windows reserved names
+      const windowsReserved = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+      const appReserved = ['current', 'settings', 'backup', 'temp', 'tmp'];
+      
+      if (windowsReserved.includes(name.toUpperCase()) || appReserved.includes(name.toLowerCase())) {
+        isValid = false;
+        errorMessage = "Reserved name cannot be used";
+      } else if (name.includes('.') && name.split('.').some(part => part === '')) {
+        isValid = false;
+        errorMessage = "Cannot contain consecutive dots";
+      }
+    }
 
     this.saveButton.disabled = !isValid;
 
-    // Update input style
+    // Update input style and show error message
     if (name.length > 0) {
       this.profileNameInput.classList.toggle("invalid", !isValid);
+      if (!isValid && errorMessage) {
+        this.profileNameInput.title = errorMessage;
+      } else {
+        this.profileNameInput.title = "";
+      }
     } else {
       this.profileNameInput.classList.remove("invalid");
+      this.profileNameInput.title = "";
     }
   }
 

@@ -580,7 +580,7 @@ impl ConfigService {
             .map_err(|e| AppError::ConfigError(format!("Failed to serialize JSON: {}", e)))?;
 
         // Write to temporary file first (in same directory for atomic rename)
-        let temp_path = self.default_settings_path.with_extension("json.tmp");
+        let temp_path = self.create_temp_file_path(&self.default_settings_path)?;
 
         // Clean up any existing temp file
         if temp_path.exists() {
@@ -699,9 +699,7 @@ impl ConfigService {
         })?;
 
         // Use atomic operation for restore too
-        let temp_path = self
-            .default_settings_path
-            .with_extension("json.restore_tmp");
+        let temp_path = self.create_temp_file_path(&self.default_settings_path)?;
 
         fs::copy(backup_path, &temp_path).map_err(|e| {
             AppError::FileSystemError(format!("Failed to copy backup to temp: {}", e))
@@ -932,7 +930,7 @@ impl ConfigService {
         Ok(())
     }
 
-    /// Validate profile name
+    /// Validate profile name with cross-platform compatibility
     pub fn validate_profile_name(&self, name: &str) -> AppResult<()> {
         if name.is_empty() {
             return Err(AppError::ConfigError(
@@ -940,27 +938,63 @@ impl ConfigService {
             ));
         }
 
-        if name.len() > 255 {
+        // Check length limits (more restrictive for better compatibility)
+        if name.len() > 200 {
             return Err(AppError::ConfigError(
-                "Profile name too long (max 255 characters)".to_string(),
+                "Profile name too long (max 200 characters)".to_string(),
             ));
         }
 
-        // Check for invalid characters
-        let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\0'];
+        // Check for invalid characters (comprehensive list for all platforms)
+        let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\0', '\t', '\r', '\n'];
         if name.chars().any(|c| invalid_chars.contains(&c)) {
             return Err(AppError::ConfigError(
-                "Profile name contains invalid characters. Avoid: / \\ : * ? \" < > |".to_string(),
+                "Profile name contains invalid characters. Avoid: / \\ : * ? \" < > | and control characters".to_string(),
             ));
         }
 
-        // Check for reserved names
-        let reserved_names = ["current", "settings", "backup"];
-        if reserved_names.contains(&name.to_lowercase().as_str()) {
+        // Check for names that start or end with spaces or dots (problematic on Windows)
+        if name.starts_with(' ') || name.ends_with(' ') || name.starts_with('.') || name.ends_with('.') {
+            return Err(AppError::ConfigError(
+                "Profile name cannot start or end with spaces or dots".to_string(),
+            ));
+        }
+
+        // Check for Windows reserved names (case-insensitive)
+        let windows_reserved_names = [
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+        ];
+        let name_upper = name.to_uppercase();
+        if windows_reserved_names.contains(&name_upper.as_str()) {
             return Err(AppError::ConfigError(format!(
-                "'{}' is a reserved name and cannot be used",
+                "'{}' is a reserved system name and cannot be used",
                 name
             )));
+        }
+
+        // Check for application reserved names
+        let app_reserved_names = ["current", "settings", "backup", "temp", "tmp"];
+        if app_reserved_names.contains(&name.to_lowercase().as_str()) {
+            return Err(AppError::ConfigError(format!(
+                "'{}' is a reserved application name and cannot be used",
+                name
+            )));
+        }
+
+        // Check for names that could cause issues with file extensions
+        if name.contains('.') && name.split('.').any(|part| part.is_empty()) {
+            return Err(AppError::ConfigError(
+                "Profile name cannot contain consecutive dots or empty parts".to_string(),
+            ));
+        }
+
+        // Check for Unicode control characters and non-printable characters
+        if name.chars().any(|c| c.is_control() && c != ' ') {
+            return Err(AppError::ConfigError(
+                "Profile name cannot contain control characters".to_string(),
+            ));
         }
 
         Ok(())
@@ -986,6 +1020,53 @@ impl ConfigService {
         self.save_to_file(&self.default_settings_path, content)
     }
 
+    /// Create a secure temporary file path in the same directory as the target file
+    fn create_temp_file_path(&self, target_path: &Path) -> AppResult<PathBuf> {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        
+        // Get the parent directory of the target file
+        let parent_dir = target_path.parent()
+            .ok_or_else(|| AppError::FileSystemError("Cannot determine parent directory".to_string()))?;
+        
+        // Generate a unique temporary filename using timestamp and process ID
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let process_id = std::process::id();
+        
+        // Create filename with original extension plus .tmp
+        let original_filename = target_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("temp");
+        let temp_filename = format!(".{}.{}.{}.tmp", original_filename, timestamp, process_id);
+        
+        let temp_path = parent_dir.join(temp_filename);
+        
+        // Ensure the parent directory exists and is writable
+        if !parent_dir.exists() {
+            return Err(AppError::FileSystemError(format!(
+                "Parent directory does not exist: {:?}", parent_dir
+            )));
+        }
+        
+        // Test write permissions by creating and immediately removing a test file
+        let test_file = parent_dir.join(format!(".write_test_{}", process_id));
+        match fs::write(&test_file, b"test") {
+            Ok(()) => {
+                let _ = fs::remove_file(&test_file); // Clean up test file
+            }
+            Err(e) => {
+                return Err(AppError::FileSystemError(format!(
+                    "Directory is not writable: {:?} - {}", parent_dir, e
+                )));
+            }
+        }
+        
+        log::debug!("Created temp file path: {:?} for target: {:?}", temp_path, target_path);
+        Ok(temp_path)
+    }
+
     /// Save content to file with atomic operation
     fn save_to_file(&self, path: &Path, content: &str) -> AppResult<()> {
         // Validate and normalize JSON
@@ -996,7 +1077,7 @@ impl ConfigService {
             .map_err(|e| AppError::ConfigError(format!("Failed to serialize JSON: {}", e)))?;
 
         // Write to temporary file first
-        let temp_path = path.with_extension("tmp");
+        let temp_path = self.create_temp_file_path(path)?;
 
         // Clean up any existing temp file
         if temp_path.exists() {
