@@ -111,6 +111,7 @@ async fn get_profiles_list(
 async fn get_profile_status(
     profile_id: String,
     app_state: tauri::State<'_, Arc<Mutex<App>>>,
+    settings_state: tauri::State<'_, std::sync::Mutex<settings_service::SettingsService>>,
 ) -> Result<String, String> {
     log::debug!("get_profile_status called for profile: {}", profile_id);
 
@@ -135,9 +136,18 @@ async fn get_profile_status(
         }
     };
 
+    // Get ignored fields from settings
+    let ignored_fields = match settings_state.lock() {
+        Ok(settings) => settings.get_ignored_fields().to_vec(),
+        Err(e) => {
+            log::warn!("Failed to get ignored fields from settings: {}, using defaults", e);
+            crate::UserSettings::get_default_ignored_fields()
+        }
+    };
+
     match config.read_profile_content(&profile_id) {
         Ok(content) => {
-            let status = config.get_detailed_profile_status(&content);
+            let status = config.get_detailed_profile_status_with_ignored_fields(&content, Some(&ignored_fields));
             let icon = match status {
                 crate::ProfileStatus::FullMatch => "✅",
                 crate::ProfileStatus::PartialMatch => "🔄",
@@ -160,22 +170,18 @@ async fn load_profile_content(
 ) -> Result<String, String> {
     log::info!("load_profile_content called for profile: {}", profile_id);
 
-    let app = match app_state.try_lock() {
-        Ok(guard) => guard,
-        Err(e) => {
-            log::error!("Failed to lock app state: {}", e);
-            return Err("Failed to access application state".to_string());
-        }
-    };
+    // Use blocking lock for load_profile_content to avoid race conditions
+    // This is critical for the Current profile loading issue
+    let app = app_state.lock().unwrap_or_else(|poisoned| {
+        log::warn!("App state lock was poisoned, recovering");
+        poisoned.into_inner()
+    });
 
     let config_service = app.get_config_service();
-    let mut config = match config_service.try_lock() {
-        Ok(guard) => guard,
-        Err(e) => {
-            log::error!("Failed to lock config service: {}", e);
-            return Err("Failed to access configuration service".to_string());
-        }
-    };
+    let mut config = config_service.lock().unwrap_or_else(|poisoned| {
+        log::warn!("Config service lock was poisoned, recovering");
+        poisoned.into_inner()
+    });
 
     match config.read_profile_content(&profile_id) {
         Ok(content) => {
@@ -357,6 +363,10 @@ pub fn run() {
             settings_service::update_language,
             settings_service::update_show_notifications,
             settings_service::reset_settings_to_defaults,
+            settings_service::get_ignored_fields,
+            settings_service::update_ignored_fields,
+            settings_service::get_default_ignored_fields,
+            settings_service::reset_ignored_fields_to_default,
             i18n_service::get_current_locale,
             i18n_service::set_locale,
             i18n_service::get_text,

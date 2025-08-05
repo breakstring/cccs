@@ -48,6 +48,8 @@ pub struct UserSettings {
     pub auto_start_monitoring: bool,
     pub language: Option<String>,
     pub show_notifications: bool,
+    #[serde(default = "UserSettings::get_default_ignored_fields")]
+    pub ignored_fields: Vec<String>, // 配置比较时要忽略的字段列表
 }
 
 impl Default for UserSettings {
@@ -57,7 +59,51 @@ impl Default for UserSettings {
             auto_start_monitoring: true,
             language: None,
             show_notifications: true,
+            ignored_fields: Self::get_default_ignored_fields(),
         }
+    }
+}
+
+impl UserSettings {
+    /// 获取默认的忽略字段列表
+    pub fn get_default_ignored_fields() -> Vec<String> {
+        vec![
+            "model".to_string(),
+            "feedbackSurveyState".to_string(),
+        ]
+    }
+    
+    /// 验证忽略字段列表的有效性
+    pub fn validate_ignored_fields(fields: &[String]) -> Result<(), String> {
+        for field in fields {
+            let field = field.trim();
+            if field.is_empty() {
+                return Err("字段名不能为空".to_string());
+            }
+            
+            // 检查字段名是否包含无效字符
+            if field.contains(|c: char| c.is_whitespace() || "{}[]\"'\\".contains(c)) {
+                return Err(format!("字段名 '{}' 包含无效字符", field));
+            }
+            
+            // 检查字段名长度
+            if field.len() > 100 {
+                return Err(format!("字段名 '{}' 过长（最大100字符）", field));
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// 清理和标准化忽略字段列表
+    pub fn normalize_ignored_fields(fields: Vec<String>) -> Vec<String> {
+        fields
+            .into_iter()
+            .map(|field| field.trim().to_string())
+            .filter(|field| !field.is_empty())
+            .collect::<std::collections::HashSet<_>>() // 去重
+            .into_iter()
+            .collect()
     }
 }
 

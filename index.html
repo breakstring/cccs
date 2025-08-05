@@ -22,8 +22,8 @@
                 </div>
                 
                 <div class="nav-footer">
-                    <div class="nav-item about-nav-item" data-profile-id="about">
-                        <span class="nav-item-text" data-i18n="about_nav_item">About</span>
+                    <div class="nav-item settings-nav-item" data-profile-id="settings">
+                        <span class="nav-item-text" data-i18n="settings_nav_item">Settings</span>
                     </div>
                 </div>
             </div>
@@ -69,73 +69,128 @@
                     </div>
                 </div>
 
-                <!-- About View -->
-                <div id="about-view" class="content-view" style="display: none;">
-                    <div class="view-content">
-                        <!-- Application Information -->
-                        <section class="info-section">
+                <!-- Settings View -->
+                <div id="settings-view" class="content-view" style="display: none;">
+                    <!-- Top Section: Application Information -->
+                    <div class="settings-top-section">
+                        <section class="app-info-section">
                             <h2 data-i18n="app_info_title">Application Information</h2>
                             <div class="separator"></div>
                             <p data-i18n="app_description">
                                 CCCS (Claude Code Configuration Switcher) is a tool for quickly switching Claude Code configuration files.
                             </p>
-                        </section>
-
-                        <!-- Language Settings -->
-                        <section class="settings-section">
-                            <h2 data-i18n="language_settings_title">Language Settings</h2>
-                            <div class="separator"></div>
-                            <div class="setting-item">
-                                <label for="language-select" data-i18n="interface_language_label">Interface language:</label>
-                                <select id="language-select">
-                                    <option value="" data-i18n="follow_system">Follow system</option>
-                                    <option value="zh" data-i18n="chinese">中文</option>
-                                    <option value="en" data-i18n="english">English</option>
-                                </select>
+                            <div class="status-items">
+                                <div class="status-item">
+                                    <span class="status-label" data-i18n="claude_directory_label">Claude Code directory:</span>
+                                    <span class="status-value" id="claude-directory">~/.claude</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-label" data-i18n="profiles_found_label">Configuration files found:</span>
+                                    <span class="status-value" id="profiles-count">0</span>
+                                </div>
                             </div>
-                        </section>
-                        
-                        <!-- Profile Status Icons -->
-                        <section class="status-icons-section">
-                            <h2 data-i18n="status_icons_title">Profile Status Icons</h2>
-                            <div class="separator"></div>
                             
-                            <div class="status-icon-item">
-                                <span class="status-icon">✅</span>
-                                <span class="status-description" data-i18n="full_match_description">Complete match - configuration fully matches current settings</span>
-                            </div>
-                            <div class="status-icon-item">
-                                <span class="status-icon">🔄</span>
-                                <span class="status-description" data-i18n="partial_match_description">Partial match - identical except model field (auto-updated by Claude Code)</span>
-                            </div>
-                            <div class="status-icon-item">
-                                <span class="status-icon">❌</span>
-                                <span class="status-description" data-i18n="error_status_description">Error - failed to read or parse configuration file</span>
-                            </div>
-                            <div class="status-icon-item">
-                                <span class="status-icon">&nbsp;</span>
-                                <span class="status-description" data-i18n="no_match_description">No icon - configuration differs from current settings</span>
-                            </div>
-                        </section>
-
-                        <!-- Current Status -->
-                        <section class="status-section">
-                            <h2 data-i18n="current_status_title">Current Status</h2>
-                            <div class="separator"></div>
-                            <div class="status-item">
-                                <span class="status-label" data-i18n="claude_directory_label">Claude Code directory:</span>
-                                <span class="status-value" id="claude-directory">~/.claude</span>
-                            </div>
-                            <div class="status-item">
-                                <span class="status-label" data-i18n="profiles_found_label">Configuration files found:</span>
-                                <span class="status-value" id="profiles-count">0</span>
-                            </div>
+                            <!-- Language Settings -->
+                            <section class="language-settings-top-section">
+                                <h3 data-i18n="language_settings_title">Language Settings</h3>
+                                <div class="separator"></div>
+                                <div class="setting-item">
+                                    <label for="language-select" data-i18n="interface_language_label">Interface language:</label>
+                                    <select id="language-select">
+                                        <option value="" data-i18n="follow_system">Follow system</option>
+                                        <option value="zh" data-i18n="chinese">中文</option>
+                                        <option value="en" data-i18n="english">English</option>
+                                    </select>
+                                </div>
+                            </section>
                         </section>
                     </div>
-                    
-                    <div class="view-footer">
-                        <div class="about-controls">
-                            <button id="close-button" class="primary-button" data-i18n="close_button">
+
+                    <!-- Middle Section: Left-Right Split Layout -->
+                    <div class="settings-middle-section">
+                        <!-- Left Panel: Field Exclusion Settings -->
+                        <div class="settings-left-panel">
+                            <section class="field-exclusion-section">
+                                <h3 data-i18n="field_exclusion_title">Field Exclusion Settings</h3>
+                                <div class="separator"></div>
+                                <p class="section-description" data-i18n="field_exclusion_description">
+                                    Configure which fields to ignore when comparing profiles with current settings.
+                                </p>
+                                
+                                <div class="field-list-container">
+                                    <div class="field-list-header">
+                                        <label data-i18n="ignored_fields_label">Ignored Fields:</label>
+                                        <button id="add-field-button" class="add-field-button" data-i18n="add_field_button">
+                                            <span class="button-icon">➕</span>
+                                            <span class="button-text">Add Field</span>
+                                        </button>
+                                    </div>
+                                    
+                                    <div id="ignored-fields-list" class="ignored-fields-list">
+                                        <!-- Dynamic field list will be populated here -->
+                                    </div>
+                                    
+                                    <div class="field-input-container" id="field-input-container" style="display: none;">
+                                        <input type="text" id="new-field-input" class="new-field-input" 
+                                               data-i18n-placeholder="field_name_placeholder" 
+                                               maxlength="100" autocomplete="off" autocorrect="off" 
+                                               autocapitalize="off" spellcheck="false">
+                                        <div class="field-input-buttons">
+                                            <button id="confirm-add-field" class="confirm-button" data-i18n="confirm_button">✓</button>
+                                            <button id="cancel-add-field" class="cancel-button" data-i18n="cancel_button">✗</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="field-actions">
+                                    <button id="reset-fields-button" class="secondary-button" data-i18n="reset_to_default_button">
+                                        <span class="button-icon">🔄</span>
+                                        <span class="button-text">Reset to Default</span>
+                                    </button>
+                                </div>
+                            </section>
+                        </div>
+
+                        <!-- Right Panel: Icon Examples and Explanation -->
+                        <div class="settings-right-panel">
+                            <section class="status-icons-section">
+                                <h3 data-i18n="status_icons_title">Profile Status Icons</h3>
+                                <div class="separator"></div>
+                                <p class="section-description" data-i18n="status_icons_description">
+                                    Understanding profile comparison results:
+                                </p>
+                                
+                                <div class="status-icon-list">
+                                    <div class="status-icon-item">
+                                        <span class="status-icon">✅</span>
+                                        <span class="status-text" data-i18n="full_match_title">Complete Match</span>
+                                    </div>
+                                    <div class="status-icon-item">
+                                        <span class="status-icon">🔄</span>
+                                        <span class="status-text" data-i18n="partial_match_title">Partial Match</span>
+                                    </div>
+                                    <div class="status-icon-item">
+                                        <span class="status-icon">❌</span>
+                                        <span class="status-text" data-i18n="error_status_title">Error</span>
+                                    </div>
+                                    <div class="status-icon-item">
+                                        <span class="status-icon">&nbsp;</span>
+                                        <span class="status-text" data-i18n="no_match_title">No Match</span>
+                                    </div>
+                                </div>
+                            </section>
+                            
+                        </div>
+                    </div>
+
+                    <!-- Bottom Section: Action Buttons -->
+                    <div class="settings-bottom-section">
+                        <div class="settings-controls">
+                            <button id="save-settings-button" class="primary-button" data-i18n="save_settings_button">
+                                <span class="button-icon">💾</span>
+                                <span class="button-text">Save Settings</span>
+                            </button>
+                            <button id="close-button" class="secondary-button" data-i18n="close_button">
                                 <span class="button-icon">❌</span>
                                 <span class="button-text">Close</span>
                             </button>

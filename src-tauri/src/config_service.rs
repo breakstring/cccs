@@ -96,25 +96,42 @@ impl ConfigService {
 
     /// Get default settings with caching
     fn get_default_settings_cached(&mut self) -> AppResult<String> {
+        log::debug!("get_default_settings_cached: Starting to get default settings");
+        
         // Check cache first
         if let Some((cached_content, cached_time)) = &self.default_settings_cache {
+            log::debug!("get_default_settings_cached: Found cached content, checking validity");
             if self.is_cache_valid(*cached_time) {
+                log::debug!("get_default_settings_cached: Cache is still valid, checking file modification");
                 // Check if file has been modified
                 if let Ok(metadata) = fs::metadata(&self.default_settings_path) {
                     if let Ok(modified) = metadata.modified() {
                         if modified <= *cached_time {
-                            log::debug!("Using cached default settings");
+                            log::debug!("get_default_settings_cached: Using cached default settings (file not modified)");
                             return Ok(cached_content.clone());
+                        } else {
+                            log::debug!("get_default_settings_cached: File was modified since cache, need to reload");
                         }
+                    } else {
+                        log::warn!("get_default_settings_cached: Failed to get file modification time");
                     }
+                } else {
+                    log::warn!("get_default_settings_cached: Failed to get file metadata for {:?}", self.default_settings_path);
                 }
+            } else {
+                log::debug!("get_default_settings_cached: Cache expired, need to reload");
             }
+        } else {
+            log::debug!("get_default_settings_cached: No cached content found");
         }
 
         // Read fresh content
-        log::debug!("Reading fresh default settings");
+        log::debug!("get_default_settings_cached: Reading fresh default settings from {:?}", self.default_settings_path);
         let content = self.read_default_settings()?;
+        log::debug!("get_default_settings_cached: Successfully read {} bytes from default settings", content.len());
+        
         self.default_settings_cache = Some((content.clone(), SystemTime::now()));
+        log::debug!("get_default_settings_cached: Updated cache with fresh content");
 
         Ok(content)
     }
@@ -311,8 +328,17 @@ impl ConfigService {
         }
     }
 
-    /// Get detailed profile status with smart comparison
+    /// Get detailed profile status with smart comparison using configurable ignored fields
     pub fn get_detailed_profile_status(&self, profile_content: &str) -> ProfileStatus {
+        self.get_detailed_profile_status_with_ignored_fields(profile_content, None)
+    }
+    
+    /// Get detailed profile status with custom ignored fields
+    pub fn get_detailed_profile_status_with_ignored_fields(
+        &self, 
+        profile_content: &str, 
+        ignored_fields: Option<&[String]>
+    ) -> ProfileStatus {
         let default_content = match fs::read_to_string(&self.default_settings_path) {
             Ok(content) => content,
             Err(e) => {
@@ -338,36 +364,59 @@ impl ConfigService {
             return ProfileStatus::FullMatch;
         }
 
-        // Always check if only model field is different
-        let matches_ignoring_model =
-            self.compare_json_ignoring_field(&profile_json, &default_json, "model");
-        if matches_ignoring_model {
+        // Use provided ignored fields or get from settings
+        let fields_to_ignore = ignored_fields
+            .map(|f| f.to_vec())
+            .unwrap_or_else(|| self.get_ignored_fields());
+
+        // Check if configurations match when ignoring specified fields
+        if self.compare_json_ignoring_fields(&profile_json, &default_json, &fields_to_ignore) {
             return ProfileStatus::PartialMatch;
         }
 
         ProfileStatus::NoMatch
     }
+    
+    /// Get ignored fields from settings (with fallback to default)
+    fn get_ignored_fields(&self) -> Vec<String> {
+        // TODO: This should be injected from the app state to get real settings
+        // For now, return the default fields as fallback
+        crate::UserSettings::get_default_ignored_fields()
+    }
 
-    /// Compare two JSON values while ignoring a specific field
+    /// Compare two JSON values while ignoring multiple fields
+    fn compare_json_ignoring_fields(
+        &self,
+        json1: &serde_json::Value,
+        json2: &serde_json::Value,
+        ignore_fields: &[String],
+    ) -> bool {
+        match (json1, json2) {
+            (serde_json::Value::Object(obj1), serde_json::Value::Object(obj2)) => {
+                // Create modified copies without the ignored fields
+                let mut filtered_obj1 = obj1.clone();
+                let mut filtered_obj2 = obj2.clone();
+
+                // Remove all ignored fields
+                for field in ignore_fields {
+                    filtered_obj1.remove(field);
+                    filtered_obj2.remove(field);
+                }
+
+                filtered_obj1 == filtered_obj2
+            }
+            _ => json1 == json2,
+        }
+    }
+    
+    /// Compare two JSON values while ignoring a specific field (legacy method for compatibility)
     fn compare_json_ignoring_field(
         &self,
         json1: &serde_json::Value,
         json2: &serde_json::Value,
         ignore_field: &str,
     ) -> bool {
-        match (json1, json2) {
-            (serde_json::Value::Object(obj1), serde_json::Value::Object(obj2)) => {
-                // Create modified copies without the ignored field
-                let mut filtered_obj1 = obj1.clone();
-                let mut filtered_obj2 = obj2.clone();
-
-                filtered_obj1.remove(ignore_field);
-                filtered_obj2.remove(ignore_field);
-
-                filtered_obj1 == filtered_obj2
-            }
-            _ => json1 == json2,
-        }
+        self.compare_json_ignoring_fields(json1, json2, &[ignore_field.to_string()])
     }
 
     /// Read the default settings.json content
@@ -745,20 +794,29 @@ impl ConfigService {
 
     /// Get all profiles information including Current
     pub fn get_all_profiles_info(&mut self) -> AppResult<Vec<ProfileInfo>> {
+        log::debug!("get_all_profiles_info: Starting to get all profiles information");
+        
         // First scan for profiles to ensure we have latest data
+        log::debug!("get_all_profiles_info: Scanning for profiles");
         self.scan_profiles()?;
+        log::debug!("get_all_profiles_info: Found {} profiles after scan", self.profiles.len());
 
         let mut profiles_info = Vec::new();
 
         // Add Current profile first
+        log::debug!("get_all_profiles_info: Getting current settings content");
         let _current_content = match self.get_default_settings_cached() {
-            Ok(content) => content,
+            Ok(content) => {
+                log::debug!("get_all_profiles_info: Successfully got current settings content ({} bytes)", content.len());
+                content
+            },
             Err(e) => {
-                log::warn!("Failed to read current settings: {}", e);
+                log::error!("get_all_profiles_info: Failed to read current settings: {}", e);
                 String::new()
             }
         };
 
+        log::debug!("get_all_profiles_info: Getting current settings metadata");
         let current_metadata = self.get_file_metadata(&self.default_settings_path).ok();
 
         profiles_info.push(ProfileInfo {
@@ -796,8 +854,16 @@ impl ConfigService {
 
     /// Read profile content by profile ID
     pub fn read_profile_content(&mut self, profile_id: &str) -> AppResult<String> {
+        log::debug!("read_profile_content: Reading content for profile_id: {}", profile_id);
+        
         if profile_id == "current" {
-            return self.get_default_settings_cached();
+            log::debug!("read_profile_content: Reading current profile content");
+            let result = self.get_default_settings_cached();
+            match &result {
+                Ok(content) => log::debug!("read_profile_content: Successfully read current profile content ({} bytes)", content.len()),
+                Err(e) => log::error!("read_profile_content: Failed to read current profile content: {}", e),
+            }
+            return result;
         }
 
         // Find the profile and clone the path to avoid borrowing conflicts

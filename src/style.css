@@ -1037,3 +1037,401 @@ body {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 13px;
 }
+
+/* Settings View Styles */
+#settings-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #ffffff;
+}
+
+/* Settings Navigation Styles */
+.settings-nav-item {
+    justify-content: center;
+    font-weight: 500;
+    color: #6c757d;
+}
+
+.settings-nav-item:hover {
+    color: #495057;
+}
+
+.settings-nav-item.active {
+    background: #6c757d;
+    color: white;
+}
+
+/* Settings Top Section */
+.settings-top-section {
+    flex-shrink: 0;
+    padding: 20px 24px 16px 24px;
+    border-bottom: 1px solid #e9ecef;
+    background: #f8f9fa;
+}
+
+.app-info-section h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 6px;
+}
+
+.app-info-section p {
+    color: #6c757d;
+    line-height: 1.5;
+    margin-bottom: 12px;
+}
+
+.status-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.status-items .status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.status-items .status-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.status-items .status-label {
+    font-weight: 500;
+    color: #495057;
+}
+
+.status-items .status-value {
+    color: #212529;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+}
+
+/* Settings Middle Section - Left-Right Split */
+.settings-middle-section {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    overflow-y: auto; /* 整体滚动 */
+}
+
+.settings-left-panel {
+    flex: 1;
+    padding: 16px 20px;
+    overflow-y: visible; /* 不要独立滚动 */
+    background: #ffffff;
+}
+
+.settings-right-panel {
+    flex: 1;
+    padding: 16px 20px;
+    overflow-y: visible; /* 不要独立滚动 */
+    background: #ffffff; /* 改为白色背景，与左侧面板一致 */
+}
+
+/* Field Exclusion Section */
+.field-exclusion-section h3,
+.status-icons-section h3,
+.language-settings-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 6px;
+}
+
+.section-description {
+    color: #6c757d;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.field-list-container {
+    margin-bottom: 20px;
+}
+
+.field-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.field-list-header label {
+    font-weight: 500;
+    color: #495057;
+    font-size: 14px;
+}
+
+.add-field-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.add-field-button:hover {
+    background: #218838;
+    transform: translateY(-1px);
+}
+
+.add-field-button:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.ignored-fields-list {
+    min-height: 120px;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 12px;
+    background: #f8f9fa;
+}
+
+.field-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.field-item:hover {
+    border-color: #ced4da;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.field-item:last-child {
+    margin-bottom: 0;
+}
+
+.field-name {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    color: #495057;
+    font-weight: 500;
+}
+
+.remove-field-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.remove-field-button:hover {
+    background: #c82333;
+    transform: scale(1.1);
+}
+
+.empty-state {
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    padding: 40px 20px;
+    font-size: 14px;
+}
+
+/* Field Input Container */
+.field-input-container {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: #e3f2fd;
+    border: 1px solid #bbdefb;
+    border-radius: 8px;
+    margin-top: 12px;
+}
+
+.new-field-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    background: #ffffff;
+    color: #495057;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.new-field-input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.new-field-input.invalid {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+}
+
+.field-input-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.confirm-button,
+.cancel-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.confirm-button {
+    background: #28a745;
+    color: white;
+}
+
+.confirm-button:hover:not(:disabled) {
+    background: #218838;
+    transform: scale(1.05);
+}
+
+.confirm-button:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.cancel-button {
+    background: #6c757d;
+    color: white;
+}
+
+.cancel-button:hover {
+    background: #5a6268;
+    transform: scale(1.05);
+}
+
+/* Field Actions */
+.field-actions {
+    display: flex;
+    justify-content: flex-start;
+}
+
+/* Status Icons Section (Right Panel) - Simplified */
+.status-icon-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px; /* 进一步减少间距 */
+}
+
+.status-icon-list .status-icon-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0; /* 减少垂直间距 */
+}
+
+.status-icon-list .status-icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.status-icon-list .status-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: #495057;
+}
+
+/* Language Settings Section (Top Area) */
+.language-settings-top-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e9ecef;
+}
+
+.language-settings-top-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 8px;
+}
+
+.language-settings-top-section .setting-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+}
+
+.language-settings-top-section label {
+    font-weight: 500;
+    color: #495057;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.language-settings-top-section select {
+    max-width: 150px;
+    padding: 6px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #495057;
+    font-size: 14px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.language-settings-top-section select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Settings Bottom Section */
+.settings-bottom-section {
+    flex-shrink: 0;
+    padding: 20px 24px;
+    border-top: 1px solid #e9ecef;
+    background: #f8f9fa;
+}
+
+.settings-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}

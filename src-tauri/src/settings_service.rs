@@ -116,6 +116,10 @@ impl SettingsService {
             }
         }
         
+        // Validate ignored fields
+        crate::UserSettings::validate_ignored_fields(&settings.ignored_fields)
+            .map_err(|e| AppError::SettingsError(format!("Invalid ignored fields in settings: {}", e)))?;
+        
         Ok(())
     }
     
@@ -193,6 +197,49 @@ impl SettingsService {
     /// Get current settings
     pub fn get_current_settings(&self) -> &UserSettings {
         &self.current_settings
+    }
+    
+    /// Get ignored fields list
+    pub fn get_ignored_fields(&self) -> &[String] {
+        &self.current_settings.ignored_fields
+    }
+    
+    /// Update ignored fields list
+    pub fn update_ignored_fields(&mut self, fields: Vec<String>) -> AppResult<()> {
+        // 验证字段列表
+        crate::UserSettings::validate_ignored_fields(&fields)
+            .map_err(|e| AppError::SettingsError(format!("Invalid ignored fields: {}", e)))?;
+        
+        // 标准化字段列表
+        let normalized_fields = crate::UserSettings::normalize_ignored_fields(fields);
+        
+        log::info!("Updating ignored fields: {:?}", normalized_fields);
+        
+        // 更新设置
+        self.current_settings.ignored_fields = normalized_fields;
+        
+        // 保存到文件
+        self.save_settings(&self.current_settings)?;
+        
+        log::info!("Ignored fields updated successfully");
+        Ok(())
+    }
+    
+    /// Get default ignored fields
+    pub fn get_default_ignored_fields() -> Vec<String> {
+        crate::UserSettings::get_default_ignored_fields()
+    }
+    
+    /// Reset ignored fields to default
+    pub fn reset_ignored_fields_to_default(&mut self) -> AppResult<()> {
+        let default_fields = Self::get_default_ignored_fields();
+        log::info!("Resetting ignored fields to default: {:?}", default_fields);
+        
+        self.current_settings.ignored_fields = default_fields;
+        self.save_settings(&self.current_settings)?;
+        
+        log::info!("Ignored fields reset to default successfully");
+        Ok(())
     }
     
     /// Get settings file path
@@ -317,6 +364,38 @@ pub async fn reset_settings_to_defaults(
 ) -> Result<(), String> {
     let mut service = state.lock().map_err(|e| format!("Failed to lock settings service: {}", e))?;
     service.reset_to_defaults()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_ignored_fields(
+    state: tauri::State<'_, std::sync::Mutex<SettingsService>>,
+) -> Result<Vec<String>, String> {
+    let service = state.lock().map_err(|e| format!("Failed to lock settings service: {}", e))?;
+    Ok(service.get_ignored_fields().to_vec())
+}
+
+#[tauri::command]
+pub async fn update_ignored_fields(
+    fields: Vec<String>,
+    state: tauri::State<'_, std::sync::Mutex<SettingsService>>,
+) -> Result<(), String> {
+    let mut service = state.lock().map_err(|e| format!("Failed to lock settings service: {}", e))?;
+    service.update_ignored_fields(fields)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_default_ignored_fields() -> Result<Vec<String>, String> {
+    Ok(SettingsService::get_default_ignored_fields())
+}
+
+#[tauri::command]
+pub async fn reset_ignored_fields_to_default(
+    state: tauri::State<'_, std::sync::Mutex<SettingsService>>,
+) -> Result<(), String> {
+    let mut service = state.lock().map_err(|e| format!("Failed to lock settings service: {}", e))?;
+    service.reset_ignored_fields_to_default()
         .map_err(|e| e.to_string())
 }
 

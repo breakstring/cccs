@@ -1,6 +1,6 @@
 [package]
 name = "cccs"
-version = "1.0.4"
+version = "1.0.5"
 description = "Claude Code Configuration Switcher"
 authors = ["KZAILab"]
 license = "MIT"

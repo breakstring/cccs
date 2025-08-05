@@ -45,8 +45,9 @@ const translations = {
 
     // New translations for enhanced UI
     profiles_section_title: "Profiles",
-    about_nav_item: "About",
+    settings_nav_item: "Settings",
     current_profile_title: "Current",
+    current_profile_display_name: "Current",
     json_editor_title: "Configuration Editor",
     json_editor_hint: "Edit your configuration in JSON format",
     json_editor_placeholder: "Loading configuration...",
@@ -80,6 +81,30 @@ const translations = {
     profile_create_error: "Failed to create profile",
     profile_deleted: "Profile deleted successfully",
     profile_delete_error: "Failed to delete profile",
+
+    // Field exclusion settings
+    field_exclusion_title: "Field Exclusion Settings",
+    field_exclusion_description: "Configure which fields to ignore when comparing profiles with current settings.",
+    ignored_fields_label: "Ignored Fields:",
+    add_field_button: "Add Field",
+    field_name_placeholder: "Enter field name",
+    confirm_button: "✓",
+    cancel_button: "✗",
+    reset_to_default_button: "Reset to Default",
+    save_settings_button: "Save Settings",
+    status_icons_description: "Understanding profile comparison results:",
+    full_match_title: "Complete Match",
+    partial_match_title: "Partial Match",
+    error_status_title: "Error",
+    no_match_title: "No Match",
+
+    // Field validation messages
+    field_name_empty: "Field name cannot be empty",
+    field_name_invalid: "Field name contains invalid characters",
+    field_name_too_long: "Field name too long (max 100 characters)",
+    field_already_exists: "Field already exists",
+    settings_saved: "Settings saved successfully",
+    settings_save_error: "Failed to save settings",
   },
   zh: {
     // Existing translations
@@ -107,8 +132,9 @@ const translations = {
 
     // New translations for enhanced UI
     profiles_section_title: "配置文件",
-    about_nav_item: "关于",
+    settings_nav_item: "设置",
     current_profile_title: "当前配置",
+    current_profile_display_name: "当前配置",
     json_editor_title: "配置编辑器",
     json_editor_hint: "以JSON格式编辑您的配置",
     json_editor_placeholder: "正在加载配置...",
@@ -139,6 +165,30 @@ const translations = {
     profile_create_error: "创建配置文件失败",
     profile_deleted: "配置文件删除成功",
     profile_delete_error: "删除配置文件失败",
+
+    // Field exclusion settings
+    field_exclusion_title: "字段排除设置",
+    field_exclusion_description: "配置在比较配置文件与当前设置时要忽略的字段。",
+    ignored_fields_label: "忽略的字段:",
+    add_field_button: "添加字段",
+    field_name_placeholder: "输入字段名",
+    confirm_button: "✓",
+    cancel_button: "✗",
+    reset_to_default_button: "重置为默认",
+    save_settings_button: "保存设置",
+    status_icons_description: "理解配置比较结果:",
+    full_match_title: "完全匹配",
+    partial_match_title: "部分匹配",
+    error_status_title: "错误",
+    no_match_title: "不匹配",
+
+    // Field validation messages
+    field_name_empty: "字段名不能为空",
+    field_name_invalid: "字段名包含无效字符",
+    field_name_too_long: "字段名过长（最大100字符）",
+    field_already_exists: "字段已存在",
+    settings_saved: "设置保存成功",
+    settings_save_error: "保存设置失败",
   },
 };
 
@@ -235,46 +285,61 @@ class NavigationPanel {
   constructor() {
     this.selectedItem = null;
     this.profileNavList = document.getElementById("profile-nav-list");
-    this.aboutNavItem = document.querySelector(".about-nav-item");
+    this.settingsNavItem = document.querySelector(".settings-nav-item");
 
     this.initializeEventListeners();
   }
 
   initializeEventListeners() {
-    // About navigation click
-    this.aboutNavItem.addEventListener("click", () => {
-      this.handleItemClick("about");
+    // Settings navigation click
+    this.settingsNavItem.addEventListener("click", () => {
+      this.handleItemClick("settings");
     });
   }
 
   async loadProfiles(shouldAutoSelect = true) {
+    console.log("NavigationPanel.loadProfiles: Starting to load profiles, shouldAutoSelect:", shouldAutoSelect);
     try {
       showLoading(true, translations[currentLanguage].loading_profiles);
 
+      console.log("NavigationPanel.loadProfiles: Invoking get_profiles_list");
       const profiles = await invoke("get_profiles_list");
+      console.log("NavigationPanel.loadProfiles: Received profiles:", profiles.length, "profiles");
+      
       globalState.profiles = profiles;
 
       this.renderProfileList(profiles);
+      console.log("NavigationPanel.loadProfiles: Rendered profile list");
 
       // 只在初次加载时自动选择第一个配置，刷新时保持当前配置
       if (shouldAutoSelect && profiles.length > 0) {
-        // 延迟切换，避免与loadProfiles的loading状态冲突
-        setTimeout(() => {
-          this.switchToProfile(profiles[0].id);
-        }, 0);
+        console.log("NavigationPanel.loadProfiles: Auto-selecting first profile:", profiles[0].id);
+        // 修复竞态条件：直接在loading结束后切换，不使用setTimeout
+        this.switchToProfile(profiles[0].id);
       } else if (!shouldAutoSelect && globalState.currentProfile) {
+        console.log("NavigationPanel.loadProfiles: Maintaining current profile:", globalState.currentProfile);
         // 刷新时保持当前选中的配置，更新导航状态
         this.updateActiveState(globalState.currentProfile);
+        // 确保内容也被重新加载
+        if (window.contentEditor) {
+          console.log("NavigationPanel.loadProfiles: Reloading current profile content after refresh");
+          window.contentEditor.loadProfile(globalState.currentProfile);
+        }
+      } else {
+        console.log("NavigationPanel.loadProfiles: No auto-selection, no current profile to maintain");
       }
 
       // Update profiles count in About section
       updateProfilesCount();
+      console.log("NavigationPanel.loadProfiles: Updated profiles count");
     } catch (error) {
-      console.error("Failed to load profiles:", error);
+      console.error("NavigationPanel.loadProfiles: Failed to load profiles:", error);
       // 不在这里显示错误通知，避免与其他操作的成功通知冲突
       // showToast("Failed to load profiles", "error");
     } finally {
+      // 确保在所有操作完成后才结束loading状态
       showLoading(false);
+      console.log("NavigationPanel.loadProfiles: Finished loading profiles");
     }
   }
 
@@ -298,7 +363,13 @@ class NavigationPanel {
       // Create text span
       const text = document.createElement("span");
       text.className = "nav-item-text";
-      text.textContent = profile.display_name;
+      
+      // Use localized display name for Current profile
+      if (profile.id === "current") {
+        text.textContent = translations[currentLanguage].current_profile_display_name;
+      } else {
+        text.textContent = profile.display_name;
+      }
 
       listItem.appendChild(iconSpan);
       listItem.appendChild(text);
@@ -388,16 +459,23 @@ class NavigationPanel {
   }
 
   switchToProfile(profileId) {
+    console.log("NavigationPanel.switchToProfile: Switching to profile:", profileId, "from:", globalState.currentProfile);
+    
     // 先更新全局状态
     globalState.currentProfile = profileId;
     globalState.hasUnsavedChanges = false;
+    console.log("NavigationPanel.switchToProfile: Updated global state");
 
     // 更新导航栏的激活状态
     this.updateActiveState(profileId);
+    console.log("NavigationPanel.switchToProfile: Updated navigation active state");
 
     // 通知内容编辑器加载配置
     if (window.contentEditor) {
+      console.log("NavigationPanel.switchToProfile: Calling contentEditor.loadProfile");
       window.contentEditor.loadProfile(profileId);
+    } else {
+      console.warn("NavigationPanel.switchToProfile: window.contentEditor not available");
     }
   }
 
@@ -408,11 +486,11 @@ class NavigationPanel {
     });
 
     // Add active class to selected item
-    if (profileId === "about") {
-      // Handle about navigation item
-      const aboutItem = document.querySelector(".about-nav-item");
-      if (aboutItem) {
-        aboutItem.classList.add("active");
+    if (profileId === "settings") {
+      // Handle settings navigation item
+      const settingsItem = document.querySelector(".settings-nav-item");
+      if (settingsItem) {
+        settingsItem.classList.add("active");
         this.selectedItem = profileId;
       }
     } else {
@@ -470,7 +548,7 @@ class ContentEditor {
     this.profileTitle = document.getElementById("profile-title");
     this.jsonEditor = document.getElementById("json-editor");
     this.jsonEditorView = document.getElementById("json-editor-view");
-    this.aboutView = document.getElementById("about-view");
+    this.settingsView = document.getElementById("settings-view");
     this.saveButton = document.getElementById("save-button");
     this.saveAsButton = document.getElementById("save-as-button");
     this.deleteButton = document.getElementById("delete-button");
@@ -504,45 +582,64 @@ class ContentEditor {
   }
 
   async loadProfile(profileId) {
+    console.log("ContentEditor.loadProfile: Starting to load profile:", profileId);
     try {
       showLoading(true, translations[currentLanguage].loading_content);
 
-      if (profileId === "about") {
-        this.showAboutContent();
+      if (profileId === "settings") {
+        console.log("ContentEditor.loadProfile: Loading settings content");
+        this.showSettingsContent();
         return;
       }
 
+      console.log("ContentEditor.loadProfile: Showing editor content");
       this.showEditorContent();
 
       // Update title
       const profile = globalState.profiles.find((p) => p.id === profileId);
       if (profile) {
-        this.profileTitle.textContent = profile.display_name;
+        console.log("ContentEditor.loadProfile: Found profile, updating title to:", profile.display_name);
+        
+        // Use localized title for Current profile
+        if (profileId === "current") {
+          this.profileTitle.textContent = translations[currentLanguage].current_profile_display_name;
+        } else {
+          this.profileTitle.textContent = profile.display_name;
+        }
+      } else {
+        console.warn("ContentEditor.loadProfile: Profile not found in globalState.profiles for id:", profileId);
       }
 
       // 显示或隐藏删除按钮（Current配置文件不显示删除按钮）
       if (this.deleteButton) {
         if (profileId === "current") {
+          console.log("ContentEditor.loadProfile: Hiding delete button for current profile");
           this.deleteButton.style.display = "none";
         } else {
+          console.log("ContentEditor.loadProfile: Showing delete button for profile:", profileId);
           this.deleteButton.style.display = "inline-flex";
         }
       }
 
       // Load content
+      console.log("ContentEditor.loadProfile: Invoking load_profile_content for:", profileId);
       const content = await invoke("load_profile_content", { profileId });
+      console.log("ContentEditor.loadProfile: Received content for", profileId, "length:", content.length);
+      
       this.jsonEditor.value = content;
       this.currentContent = content;
       this.originalContent = content;
 
       globalState.hasUnsavedChanges = false;
+      console.log("ContentEditor.loadProfile: Successfully loaded profile content for:", profileId);
     } catch (error) {
-      console.error("Failed to load profile content:", error);
+      console.error("ContentEditor.loadProfile: Failed to load profile content for", profileId, "error:", error);
       // 不显示错误通知，避免与其他操作的通知冲突
       // showToast("Failed to load profile content", "error");
       this.jsonEditor.value = "";
     } finally {
       showLoading(false);
+      console.log("ContentEditor.loadProfile: Finished loading profile, updating button state");
       // 使用 setTimeout 确保状态更新在下一个事件循环中执行
       setTimeout(() => {
         this.updateSaveButtonState();
@@ -553,24 +650,29 @@ class ContentEditor {
   showEditorContent() {
     console.log("Showing editor content");
     this.jsonEditorView.style.display = "flex";
-    this.aboutView.style.display = "none";
+    this.settingsView.style.display = "none";
 
     // 按钮状态将在loadProfile完成后统一更新，避免竞争条件
   }
 
-  showAboutContent() {
-    console.log("Showing about content");
+  showSettingsContent() {
+    console.log("Showing settings content");
     this.jsonEditorView.style.display = "none";
-    this.aboutView.style.display = "flex";
+    this.settingsView.style.display = "flex";
     this.profileTitle.textContent =
-      translations[currentLanguage].about_nav_item;
+      translations[currentLanguage].settings_nav_item;
 
-    // About页面不需要更新编辑按钮状态，因为编辑按钮区域已经隐藏了
+    // Initialize settings view
+    if (window.settingsManager) {
+      window.settingsManager.loadSettings();
+    }
+
+    // Settings页面不需要更新编辑按钮状态，因为编辑按钮区域已经隐藏了
   }
 
   handleContentChange() {
     // 只有在有效配置文件时才处理内容变化
-    if (!globalState.currentProfile || globalState.currentProfile === "about") {
+    if (!globalState.currentProfile || globalState.currentProfile === "settings") {
       return;
     }
 
@@ -584,7 +686,7 @@ class ContentEditor {
     // 基本可用性：按钮在非加载状态下默认可用
     const isLoadingState = globalState.isLoading;
     const isValidProfile =
-      globalState.currentProfile && globalState.currentProfile !== "about";
+      globalState.currentProfile && globalState.currentProfile !== "settings";
 
     // 保存和另存为按钮：在有效配置且非加载状态下可用
     this.saveButton.disabled = isLoadingState || !isValidProfile;
@@ -608,7 +710,7 @@ class ContentEditor {
   }
 
   async save() {
-    if (!globalState.currentProfile || globalState.currentProfile === "about") {
+    if (!globalState.currentProfile || globalState.currentProfile === "settings") {
       return;
     }
 
@@ -699,7 +801,7 @@ class ContentEditor {
     if (
       !globalState.currentProfile ||
       globalState.currentProfile === "current" ||
-      globalState.currentProfile === "about"
+      globalState.currentProfile === "settings"
     ) {
       return;
     }
@@ -870,6 +972,250 @@ class ContentEditor {
         document.removeEventListener("keydown", handleEsc);
       }
     });
+  }
+}
+
+// Settings Manager Component
+class SettingsManager {
+  constructor() {
+    this.ignoredFieldsList = document.getElementById("ignored-fields-list");
+    this.addFieldButton = document.getElementById("add-field-button");
+    this.fieldInputContainer = document.getElementById("field-input-container");
+    this.newFieldInput = document.getElementById("new-field-input");
+    this.confirmAddButton = document.getElementById("confirm-add-field");
+    this.cancelAddButton = document.getElementById("cancel-add-field");
+    this.resetFieldsButton = document.getElementById("reset-fields-button");
+    this.saveSettingsButton = document.getElementById("save-settings-button");
+    
+    this.currentFields = [];
+    this.isAddingField = false;
+    
+    this.initializeEventListeners();
+  }
+  
+  initializeEventListeners() {
+    // Add field button
+    this.addFieldButton.addEventListener("click", () => {
+      this.showAddFieldInput();
+    });
+    
+    // Confirm add field
+    this.confirmAddButton.addEventListener("click", () => {
+      this.handleAddField();
+    });
+    
+    // Cancel add field
+    this.cancelAddButton.addEventListener("click", () => {
+      this.hideAddFieldInput();
+    });
+    
+    // Reset to default
+    this.resetFieldsButton.addEventListener("click", () => {
+      this.resetToDefault();
+    });
+    
+    // Save settings
+    this.saveSettingsButton.addEventListener("click", () => {
+      this.saveSettings();
+    });
+    
+    // Enter key in input field
+    this.newFieldInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        this.handleAddField();
+      } else if (e.key === "Escape") {
+        this.hideAddFieldInput();
+      }
+    });
+    
+    // Input validation
+    this.newFieldInput.addEventListener("input", () => {
+      this.validateFieldInput();
+    });
+  }
+  
+  async loadSettings() {
+    try {
+      showLoading(true, "Loading settings...");
+      
+      // Load ignored fields
+      this.currentFields = await invoke("get_ignored_fields");
+      this.renderFieldsList();
+      
+      // Update profiles count
+      updateProfilesCount();
+      
+      // Update Claude directory display
+      const profilesInfo = await invoke("get_profiles_info");
+      const claudeDirectoryElement = document.getElementById("claude-directory");
+      if (claudeDirectoryElement) {
+        claudeDirectoryElement.textContent = profilesInfo.claude_directory;
+      }
+      
+    } catch (error) {
+      console.error("Failed to load settings:", error);
+      showToast(translations[currentLanguage].settings_save_error, "error");
+    } finally {
+      showLoading(false);
+    }
+  }
+  
+  renderFieldsList() {
+    this.ignoredFieldsList.innerHTML = "";
+    
+    this.currentFields.forEach((field, index) => {
+      const fieldItem = document.createElement("div");
+      fieldItem.className = "field-item";
+      
+      fieldItem.innerHTML = `
+        <span class="field-name">${this.escapeHtml(field)}</span>
+        <button class="remove-field-button" data-field-index="${index}" title="Remove field">
+          <span class="button-icon">✗</span>
+        </button>
+      `;
+      
+      // Add remove event listener
+      const removeButton = fieldItem.querySelector(".remove-field-button");
+      removeButton.addEventListener("click", () => {
+        this.removeField(index);
+      });
+      
+      this.ignoredFieldsList.appendChild(fieldItem);
+    });
+    
+    // Show empty state if no fields
+    if (this.currentFields.length === 0) {
+      const emptyState = document.createElement("div");
+      emptyState.className = "empty-state";
+      emptyState.textContent = "No ignored fields configured";
+      this.ignoredFieldsList.appendChild(emptyState);
+    }
+  }
+  
+  showAddFieldInput() {
+    if (this.isAddingField) return;
+    
+    this.isAddingField = true;
+    this.fieldInputContainer.style.display = "flex";
+    this.addFieldButton.disabled = true;
+    this.newFieldInput.value = "";
+    this.newFieldInput.focus();
+    this.validateFieldInput();
+  }
+  
+  hideAddFieldInput() {
+    this.isAddingField = false;
+    this.fieldInputContainer.style.display = "none";
+    this.addFieldButton.disabled = false;
+    this.newFieldInput.value = "";
+    this.newFieldInput.classList.remove("invalid");
+  }
+  
+  validateFieldInput() {
+    const fieldName = this.newFieldInput.value.trim();
+    let isValid = true;
+    let errorMessage = "";
+    
+    if (fieldName.length === 0) {
+      isValid = false;
+    } else if (fieldName.length > 100) {
+      isValid = false;
+      errorMessage = translations[currentLanguage].field_name_too_long;
+    } else if (/[\s{}[\]"'\\]/.test(fieldName)) {
+      isValid = false;
+      errorMessage = translations[currentLanguage].field_name_invalid;
+    } else if (this.currentFields.includes(fieldName)) {
+      isValid = false;
+      errorMessage = translations[currentLanguage].field_already_exists;
+    }
+    
+    this.confirmAddButton.disabled = !isValid;
+    this.newFieldInput.classList.toggle("invalid", fieldName.length > 0 && !isValid);
+    this.newFieldInput.title = errorMessage;
+  }
+  
+  async handleAddField() {
+    const fieldName = this.newFieldInput.value.trim();
+    
+    if (!fieldName || this.confirmAddButton.disabled) {
+      return;
+    }
+    
+    try {
+      // Add field to current list
+      this.currentFields.push(fieldName);
+      
+      // Re-render list
+      this.renderFieldsList();
+      
+      // Hide input
+      this.hideAddFieldInput();
+      
+      showToast(`Field "${fieldName}" added`, "success");
+      
+    } catch (error) {
+      console.error("Failed to add field:", error);
+      showToast("Failed to add field", "error");
+    }
+  }
+  
+  removeField(index) {
+    if (index >= 0 && index < this.currentFields.length) {
+      const fieldName = this.currentFields[index];
+      this.currentFields.splice(index, 1);
+      this.renderFieldsList();
+      showToast(`Field "${fieldName}" removed`, "success");
+    }
+  }
+  
+  async resetToDefault() {
+    try {
+      showLoading(true, "Resetting to default...");
+      
+      const defaultFields = await invoke("get_default_ignored_fields");
+      this.currentFields = [...defaultFields];
+      this.renderFieldsList();
+      
+      showToast("Reset to default fields", "success");
+      
+    } catch (error) {
+      console.error("Failed to reset to default:", error);
+      showToast("Failed to reset to default", "error");
+    } finally {
+      showLoading(false);
+    }
+  }
+  
+  async saveSettings() {
+    try {
+      showLoading(true, translations[currentLanguage].saving_settings);
+      
+      // Update ignored fields
+      await invoke("update_ignored_fields", { 
+        fields: this.currentFields 
+      });
+      
+      showToast(translations[currentLanguage].settings_saved, "success");
+      
+      // Refresh profile statuses to reflect the new ignored fields
+      setTimeout(() => {
+        if (window.navigationPanel) {
+          window.navigationPanel.loadProfileStatuses();
+        }
+      }, 300);
+      
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      showToast(translations[currentLanguage].settings_save_error, "error");
+    } finally {
+      showLoading(false);
+    }
+  }
+  
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }
 
@@ -1079,15 +1425,15 @@ function initializeApp() {
       .then((size) => {
         console.log("Tauri window size:", size.width, "x", size.height);
 
-        // 尝试设置新尺寸
+        // 尝试设置新尺寸 - 增加宽度以提供更好的桌面应用体验
         return getCurrentWindow().setSize(
           size.type === "Physical"
-            ? { type: "Physical", width: 1400, height: 1300 }
-            : { type: "Logical", width: 1400, height: 1300 }
+            ? { type: "Physical", width: 1600, height: 1500 }
+            : { type: "Logical", width: 1600, height: 1500 }
         );
       })
       .then(() => {
-        console.log("Window resized to 1400x1300");
+        console.log("Window resized to 1600x1500");
         // 验证是否成功
         return getCurrentWindow().innerSize();
       })
@@ -1105,6 +1451,7 @@ function initializeApp() {
   window.navigationPanel = new NavigationPanel();
   window.contentEditor = new ContentEditor();
   window.saveAsModal = new SaveAsModal();
+  window.settingsManager = new SettingsManager();
 
   // Debug: 检查CSS是否正确应用
   setTimeout(() => {

@@ -39,12 +39,21 @@ This is a Tauri application with a TypeScript/Vite frontend. The project combine
 ### Tauri Commands (API)
 Available commands that can be called from frontend JavaScript:
 
+#### Profile Management
 - **`get_profiles_info()`** - Get summary information about profiles
 - **`get_profiles_list()`** - Get detailed list of all profiles
 - **`load_profile_content(profile_id: String)`** - Load content of a specific profile
 - **`save_profile(profile_id: String, content: String)`** - Save changes to a profile
 - **`create_new_profile(profile_name: String, content: String)`** - Create a new profile
 - **`validate_json_content(content: String)`** - Validate JSON configuration
+
+#### Field Exclusion Settings (Dynamic Ignored Fields)
+- **`get_ignored_fields()`** - Get current list of ignored fields for profile comparison
+- **`update_ignored_fields(fields: Vec<String>)`** - Update the ignored fields list
+- **`get_default_ignored_fields()`** - Get default ignored fields (model, feedbackSurveyState)
+- **`reset_ignored_fields_to_default()`** - Reset ignored fields to default values
+
+#### Window Management
 - **`close_settings_window()`** - Close the settings window
 
 ### Permissions Configuration
@@ -66,6 +75,70 @@ Available commands that can be called from frontend JavaScript:
 - Development is handled through the Tauri configuration in `tauri.conf.json`
 - Frontend dev server runs on `http://localhost:5173`
 - Build process: `npm run build` creates the `dist` directory for Tauri
+
+### Debugging and Testing
+
+#### Recommended Debugging Workflow (TabbyMCP + tmux)
+
+**IMPORTANT**: 使用以下推荐的调试流程避免阻塞主工作流程：
+
+##### 1. 创建专用的 tmux 调试会话
+```bash
+# 创建新的 tmux 会话用于调试
+tmux new-session -d -s cccs-debug
+```
+
+##### 2. 在 tmux 会话中运行应用程序
+```bash
+# 切换到项目目录
+tmux send-keys -t cccs-debug 'cd /Users/kenn/Projects/cccs' Enter
+
+# 启动应用程序（开发模式）
+tmux send-keys -t cccs-debug 'npm run tauri:dev' Enter
+```
+
+##### 3. 查看应用程序日志
+```bash
+# 捕获 tmux 会话的屏幕内容查看日志
+tmux capture-pane -t cccs-debug -p
+
+# 如果需要查看更多历史输出
+tmux capture-pane -t cccs-debug -S -1000 -p
+```
+
+##### 4. 在会话中执行其他调试命令
+```bash
+# 向 tmux 会话发送任意命令
+tmux send-keys -t cccs-debug 'echo "Debug message"' Enter
+
+# 停止应用程序（如果需要）
+tmux send-keys -t cccs-debug 'C-c'
+
+# 重新启动应用程序
+tmux send-keys -t cccs-debug 'npm run tauri:dev' Enter
+```
+
+##### 5. 清理调试会话
+```bash
+# 结束调试会话
+tmux kill-session -t cccs-debug
+```
+
+##### TabbyMCP 工具使用
+- **获取终端会话列表**: `mcp__tabbymcp__get_ssh_session_list()`
+- **执行命令**: `mcp__tabbymcp__exec_command({tabId, command, commandExplanation})`
+- **查看终端缓冲区**: `mcp__tabbymcp__get_terminal_buffer({tabId, startLine, endLine})`
+
+##### 调试优势
+1. **非阻塞**：不会阻塞主要的工作流程
+2. **持久化**：可以随时查看应用程序状态和日志
+3. **灵活性**：可以在不中断应用的情况下执行其他命令
+4. **隔离性**：调试环境与主工作环境分离
+
+##### 注意事项
+- 使用 `tmux send-keys` 而不是直接 `tmux attach`，避免阻塞
+- 定期使用 `tmux capture-pane` 查看最新日志
+- 调试完成后记得清理 tmux 会话
 
 ### VS Code Development
 **Launch configurations available (F5)**:
@@ -160,9 +233,18 @@ project-root/
 - Shows profile status: ✅ Full match, 🔄 Partial match, ❌ Error
 - Create, edit, and save profiles through GUI
 
+### Dynamic Field Exclusion (NEW FEATURE)
+- **Configurable Ignored Fields**: Users can customize which fields to ignore during profile comparison
+- **Default Fields**: Automatically ignores `model` and `feedbackSurveyState` (fields auto-updated by Claude Code)
+- **GUI Management**: Add, remove, and reset ignored fields through Settings interface
+- **Real-time Updates**: Profile status icons update immediately when ignored fields change
+- **Backward Compatibility**: Existing configurations automatically upgrade to support the new feature
+
 ### Settings Interface
-- **Left Panel**: Navigation between profiles and About section
-- **Right Panel**: JSON editor with syntax highlighting and validation
+- **Left Panel**: Navigation between profiles and Settings section
+- **Right Panel**: 
+  - Profile view: JSON editor with syntax highlighting and validation
+  - Settings view: Three-section layout with field exclusion management
 - **Internationalization**: Chinese and English language support
 - **Responsive Design**: Works on different screen sizes
 
