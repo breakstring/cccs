@@ -54,6 +54,7 @@ const translations = {
     json_editor_hint: "Edit your configuration in JSON format",
     json_editor_placeholder: "Loading configuration...",
     save_button: "Save",
+    apply_profile_button: "Use This Profile",
     save_as_button: "Save As...",
     delete_button: "Delete Profile",
     save_as_modal_title: "Save As New Profile",
@@ -143,6 +144,7 @@ const translations = {
     json_editor_hint: "以JSON格式编辑您的配置",
     json_editor_placeholder: "正在加载配置...",
     save_button: "保存",
+    apply_profile_button: "使用该配置",
     save_as_button: "另存为...",
     delete_button: "删除配置文件",
     save_as_modal_title: "另存为新的配置文件",
@@ -554,6 +556,7 @@ class ContentEditor {
     this.jsonEditorView = document.getElementById("json-editor-view");
     this.settingsView = document.getElementById("settings-view");
     this.saveButton = document.getElementById("save-button");
+    this.applyProfileButton = document.getElementById("apply-profile-button");
     this.saveAsButton = document.getElementById("save-as-button");
     this.deleteButton = document.getElementById("delete-button");
 
@@ -572,6 +575,11 @@ class ContentEditor {
     // Save button
     this.saveButton.addEventListener("click", () => {
       this.save();
+    });
+
+    // Apply Profile button
+    this.applyProfileButton.addEventListener("click", () => {
+      this.applyProfile();
     });
 
     // Save As button
@@ -622,6 +630,17 @@ class ContentEditor {
         } else {
           console.log("ContentEditor.loadProfile: Showing delete button for profile:", profileId);
           this.deleteButton.style.display = "inline-flex";
+        }
+      }
+
+      // 显示或隐藏应用配置按钮（Current和Settings不显示应用按钮）
+      if (this.applyProfileButton) {
+        if (profileId === "current" || profileId === "settings") {
+          console.log("ContentEditor.loadProfile: Hiding apply button for profile:", profileId);
+          this.applyProfileButton.style.display = "none";
+        } else {
+          console.log("ContentEditor.loadProfile: Showing apply button for profile:", profileId);
+          this.applyProfileButton.style.display = "inline-flex";
         }
       }
 
@@ -771,6 +790,79 @@ class ContentEditor {
     } finally {
       showLoading(false);
       // 按钮状态会在加载状态结束后自动更新
+    }
+  }
+
+  async applyProfile() {
+    if (!globalState.currentProfile || globalState.currentProfile === "settings") {
+      return;
+    }
+
+    // 不能应用"current"配置到自己
+    if (globalState.currentProfile === "current") {
+      showToast("Cannot apply current configuration to itself", "error");
+      return;
+    }
+
+    // 检查配置是否还存在
+    const profileExists = globalState.profiles.some(
+      (p) => p.id === globalState.currentProfile
+    );
+    if (!profileExists) {
+      console.warn(
+        "Attempted to apply non-existent profile:",
+        globalState.currentProfile
+      );
+      showToast("Profile not found", "error");
+      return;
+    }
+
+    try {
+      showLoading(true, "Applying profile...");
+
+      // 先验证JSON格式
+      const validationResult = await invoke("validate_json_content", {
+        content: this.currentContent,
+      });
+
+      if (!validationResult.is_valid) {
+        const errorMessages = validationResult.errors
+          .map((e) => `Line ${e.line}, Column ${e.column}: ${e.message}`)
+          .join("\n");
+        this.showCustomAlert(
+          `${translations[currentLanguage].validation_error}:\n${errorMessages}`
+        );
+        return;
+      }
+
+      // 如果有未保存的更改，先保存
+      if (globalState.hasUnsavedChanges) {
+        await invoke("save_profile", {
+          profileId: globalState.currentProfile,
+          content: this.currentContent,
+        });
+        this.originalContent = this.currentContent;
+        globalState.hasUnsavedChanges = false;
+      }
+
+      // 应用配置文件
+      await invoke("apply_profile", {
+        profileId: globalState.currentProfile,
+      });
+
+      showToast("Profile applied successfully!", "success");
+
+      // 延迟刷新状态图标
+      setTimeout(() => {
+        if (window.navigationPanel) {
+          window.navigationPanel.loadProfileStatuses();
+        }
+      }, 300);
+    } catch (error) {
+      console.error("Failed to apply profile:", error);
+      showToast(`Failed to apply profile: ${error}`, "error");
+    } finally {
+      showLoading(false);
     }
   }
 

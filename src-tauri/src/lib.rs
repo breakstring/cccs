@@ -342,6 +342,50 @@ async fn validate_json_content(
 }
 
 #[tauri::command]
+async fn apply_profile(
+    profile_id: String,
+    app_state: tauri::State<'_, Arc<Mutex<App>>>,
+) -> Result<(), String> {
+    log::info!("apply_profile called for profile: {}", profile_id);
+
+    let app = match app_state.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock app state: {}", e);
+            return Err("Failed to access application state".to_string());
+        }
+    };
+
+    let config_service = app.get_config_service();
+    let mut config = match config_service.try_lock() {
+        Ok(guard) => guard,
+        Err(e) => {
+            log::error!("Failed to lock config service: {}", e);
+            return Err("Failed to access configuration service".to_string());
+        }
+    };
+
+    // Apply the profile (this will copy profile content to default settings.json)
+    match config.switch_profile(&profile_id) {
+        Ok(()) => {
+            log::info!("Successfully applied profile: {}", profile_id);
+            
+            // Force refresh profiles to update status
+            if let Err(e) = config.refresh_profile_status() {
+                log::warn!("Failed to refresh profiles after applying: {}", e);
+                // Don't return error as the profile was successfully applied
+            }
+            
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Failed to apply profile '{}': {}", profile_id, e);
+            Err(format!("Failed to apply profile: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
 async fn close_settings_window(app_handle: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app_handle.get_webview_window("settings") {
         window.close().map_err(|e| e.to_string())?;
@@ -397,6 +441,7 @@ pub fn run() {
             get_profile_status,
             load_profile_content,
             save_profile,
+            apply_profile,
             create_new_profile,
             delete_profile,
             validate_json_content,

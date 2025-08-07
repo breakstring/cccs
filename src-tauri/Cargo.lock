@@ -552,7 +552,7 @@ dependencies = [
 
 [[package]]
 name = "cccs"
-version = "1.0.6"
+version = "1.0.7"
 dependencies = [
  "crc32fast",
  "dirs 5.0.1",
