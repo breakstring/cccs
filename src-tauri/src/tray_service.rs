@@ -176,7 +176,7 @@ impl TrayService {
     }
     
     /// Create tray with provided icon
-    fn create_tray_with_icon(&self, _menu: &Menu<tauri::Wry>, icon: tauri::image::Image<'_>) -> AppResult<()> {
+    fn create_tray_with_icon(&self, menu: &Menu<tauri::Wry>, icon: tauri::image::Image<'_>) -> AppResult<()> {
         let app_handle_clone = self.app_handle.clone();
         
         let use_template_mode = self.should_use_template_mode();

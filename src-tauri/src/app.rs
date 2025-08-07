@@ -306,17 +306,17 @@ impl App {
                             // High resolution displays (1920x1080+, 4K, Retina)
                             if screen_size.height >= 1440 {
                                 // 4K or ultrawide displays
-                                (800.0, 900.0)
+                                (1000.0, 900.0)
                             } else {
                                 // 1920x1080, 2560x1440
-                                (700.0, 800.0) 
+                                (900.0, 800.0) 
                             }
                         } else if screen_size.width >= 1366 {
                             // Medium resolution (1366x768, 1440x900)
-                            (650.0, 750.0)
+                            (800.0, 750.0)
                         } else {
                             // Low resolution or small screens
-                            (600.0, 700.0)
+                            (750.0, 700.0)
                         };
                         
                         // Set conservative minimum sizes to ensure UI elements fit properly
@@ -329,11 +329,11 @@ impl App {
                         (adaptive_width, adaptive_height, min_w, min_h)
                     } else {
                         log::warn!("No primary monitor found, using default sizes");
-                        (700.0, 800.0, 500.0, 600.0) // Conservative defaults
+                        (900.0, 800.0, 500.0, 600.0) // Conservative defaults
                     }
                 } else {
                     log::warn!("Failed to get monitor info, using default sizes");
-                    (700.0, 800.0, 500.0, 600.0) // Conservative defaults
+                    (900.0, 800.0, 500.0, 600.0) // Conservative defaults
                 }
             };
 
@@ -374,7 +374,7 @@ impl App {
             })
             .build()
             {
-                Ok(window) => {
+                Ok(_window) => {
                     log::info!("Settings window created successfully");
                     // Don't call show() here - it will be called after page load
                 }
