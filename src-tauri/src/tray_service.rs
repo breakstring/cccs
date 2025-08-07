@@ -176,49 +176,113 @@ impl TrayService {
     }
     
     /// Create tray with provided icon
-    fn create_tray_with_icon(&self, menu: &Menu<tauri::Wry>, icon: tauri::image::Image<'_>) -> AppResult<()> {
+    fn create_tray_with_icon(&self, _menu: &Menu<tauri::Wry>, icon: tauri::image::Image<'_>) -> AppResult<()> {
         let app_handle_clone = self.app_handle.clone();
         
-        // 检测图标类型来决定是否使用模板模式
-        // 如果是彩色图标（如clean版本），使用普通模式保持色彩
-        // 如果是黑白图标（如hq版本），使用模板模式适应主题
         let use_template_mode = self.should_use_template_mode();
+        let show_menu_on_left = self.should_show_menu_on_left_click();
         
-        log::info!("Creating tray icon with template mode: {}", use_template_mode);
+        // 平台特定的托盘创建策略
+        #[cfg(target_os = "windows")]
+        {
+            log::info!("Creating tray icon for Windows (without menu due to Tauri bug) - template mode: {}, show_menu_on_left_click: {}", use_template_mode, show_menu_on_left);
+            
+            let _tray = TrayIconBuilder::with_id(&self.tray_id)
+                .icon(icon)
+                // Windows下不使用菜单，绕过bug
+                .icon_as_template(use_template_mode)
+                .show_menu_on_left_click(show_menu_on_left)
+                .on_menu_event(move |app, event| {
+                    log::info!("Menu event received: {:?}", event);
+                    if let Err(e) = Self::handle_menu_event_safe(app, event) {
+                        log::error!("Error handling menu event: {}", e);
+                    }
+                })
+                .on_tray_icon_event(move |tray, event| {
+                    log::info!("Tray event received: {:?}", event);
+                    let app_handle = &app_handle_clone;
+                    if let Err(e) = Self::handle_tray_event_safe(app_handle, tray, event) {
+                        log::error!("Error handling tray event: {}", e);
+                    }
+                })
+                .build(&self.app_handle)
+                .map_err(|e| AppError::TrayError(format!("Failed to build tray icon: {}", e)))?;
+        }
         
-        let _tray = TrayIconBuilder::with_id(&self.tray_id)
-            .icon(icon)
-            .menu(menu)
-            .icon_as_template(use_template_mode)
-            .show_menu_on_left_click(false) // Only show menu on right-click
-            .on_menu_event(move |app, event| {
-                if let Err(e) = Self::handle_menu_event_safe(app, event) {
-                    log::error!("Error handling menu event: {}", e);
-                }
-            })
-            .on_tray_icon_event(move |_tray, event| {
-                let app_handle = &app_handle_clone;
-                if let Err(e) = Self::handle_tray_event_safe(app_handle, event) {
-                    log::error!("Error handling tray event: {}", e);
-                }
-            })
-            .build(&self.app_handle)
-            .map_err(|e| AppError::TrayError(format!("Failed to build tray icon: {}", e)))?;
+        #[cfg(not(target_os = "windows"))]
+        {
+            log::info!("Creating tray icon for Mac/Linux (with menu) - template mode: {}, show_menu_on_left_click: {}", use_template_mode, show_menu_on_left);
+            
+            let _tray = TrayIconBuilder::with_id(&self.tray_id)
+                .icon(icon)
+                .menu(menu) // Mac/Linux下使用正常的菜单
+                .icon_as_template(use_template_mode)
+                .show_menu_on_left_click(show_menu_on_left)
+                .on_menu_event(move |app, event| {
+                    log::info!("Menu event received: {:?}", event);
+                    if let Err(e) = Self::handle_menu_event_safe(app, event) {
+                        log::error!("Error handling menu event: {}", e);
+                    }
+                })
+                .on_tray_icon_event(move |tray, event| {
+                    log::info!("Tray event received: {:?}", event);
+                    let app_handle = &app_handle_clone;
+                    if let Err(e) = Self::handle_tray_event_safe(app_handle, tray, event) {
+                        log::error!("Error handling tray event: {}", e);
+                    }
+                })
+                .build(&self.app_handle)
+                .map_err(|e| AppError::TrayError(format!("Failed to build tray icon: {}", e)))?;
+        }
         
         Ok(())
     }
     
     /// 智能决定是否使用模板模式
     fn should_use_template_mode(&self) -> bool {
-        // 在这里您可以自由调整策略：
-        // - true: 使用模板模式（适应系统主题，图标会变黑白）
-        // - false: 使用普通模式（保持原始颜色）
+        // Windows下模板模式可能会影响菜单显示，尝试禁用
+        #[cfg(target_os = "windows")]
+        {
+            false // Windows: 禁用模板模式，可能解决菜单显示问题
+        }
         
-        // 方案1：始终使用彩色模式
-        false
+        #[cfg(target_os = "macos")]
+        {
+            false // macOS: 也暂时禁用模板模式进行测试
+        }
         
-        // 方案2：根据系统主题智能选择（如果您想要这个，可以取消注释）
-        // self.detect_system_theme_preference()
+        #[cfg(target_os = "linux")]
+        {
+            false // Linux: 禁用模板模式
+        }
+    }
+    
+    /// 决定是否在左键点击时显示菜单（平台特定）
+    fn should_show_menu_on_left_click(&self) -> bool {
+        // 经过分析，Windows下的托盘菜单问题可能是因为：
+        // 1. show_menu_on_left_click(false) 禁用了左键菜单
+        // 2. 但右键菜单在某些Windows版本下可能不会自动显示
+        // 
+        // 解决方案：在所有平台都启用左键菜单，确保用户至少有一种方式访问菜单
+        
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: 启用左键菜单作为主要访问方式，右键也应该工作
+            true
+        }
+        
+        #[cfg(target_os = "macos")]
+        {
+            // macOS: 也启用左键菜单，提供更好的用户体验
+            // 用户可以左键或右键都能访问菜单
+            true
+        }
+        
+        #[cfg(target_os = "linux")]
+        {
+            // Linux: 启用左键菜单（虽然文档说不支持，但设置为true不会有害）
+            true
+        }
     }
     
     /// 检测系统主题偏好（未来扩展用）
@@ -232,18 +296,21 @@ impl TrayService {
     /// Create tray without icon as fallback
     fn create_tray_without_icon(&self, menu: &Menu<tauri::Wry>) -> AppResult<()> {
         let app_handle_clone = self.app_handle.clone();
+        let show_menu_on_left = self.should_show_menu_on_left_click();
+        log::info!("Creating tray icon without icon, show_menu_on_left_click: {}", show_menu_on_left);
+        
         let _tray = TrayIconBuilder::with_id(&self.tray_id)
             .menu(menu)
             .icon_as_template(true) // Try template mode for better macOS integration
-            .show_menu_on_left_click(false) // Only show menu on right-click
+            .show_menu_on_left_click(show_menu_on_left) // Platform-specific menu behavior
             .on_menu_event(move |app, event| {
                 if let Err(e) = Self::handle_menu_event_safe(app, event) {
                     log::error!("Error handling menu event: {}", e);
                 }
             })
-            .on_tray_icon_event(move |_tray, event| {
+            .on_tray_icon_event(move |tray, event| {
                 let app_handle = &app_handle_clone;
-                if let Err(e) = Self::handle_tray_event_safe(app_handle, event) {
+                if let Err(e) = Self::handle_tray_event_safe(app_handle, tray, event) {
                     log::error!("Error handling tray event: {}", e);
                 }
             })
@@ -267,12 +334,16 @@ impl TrayService {
     
     /// Build the basic menu structure (empty profiles, settings, exit)
     fn build_basic_menu(&self) -> AppResult<Menu<tauri::Wry>> {
+        // 尝试最简单的菜单结构来诊断Windows菜单问题
+        log::info!("Building basic menu with simple structure");
+        
         let menu = MenuBuilder::new(&self.app_handle)
-            .separator()
-            .item(&MenuItemBuilder::with_id("settings", "Settings").build(&self.app_handle)?)
-            .item(&MenuItemBuilder::with_id("exit", "Exit").build(&self.app_handle)?)
+            .text("test", "TEST MENU") // 使用简单的text方法
+            .text("settings", "Settings")
+            .text("exit", "Exit")
             .build()?;
         
+        log::info!("Basic menu built successfully");
         Ok(menu)
     }
     
@@ -298,12 +369,21 @@ impl TrayService {
             menu_builder = menu_builder.item(&menu_item);
         }
         
-        // Add separator and system menu items
-        let menu = menu_builder
-            .separator()
-            .item(&MenuItemBuilder::with_id("settings", "Settings").build(&self.app_handle)?)
-            .item(&MenuItemBuilder::with_id("exit", "Exit").build(&self.app_handle)?)
-            .build()?;
+        // Add separator only if there are profiles, then add system menu items
+        let menu = if profiles.is_empty() {
+            // No profiles - just add system menu items without separator
+            menu_builder
+                .item(&MenuItemBuilder::with_id("settings", "Settings").build(&self.app_handle)?)
+                .item(&MenuItemBuilder::with_id("exit", "Exit").build(&self.app_handle)?)
+                .build()?
+        } else {
+            // Has profiles - add separator then system menu items
+            menu_builder
+                .separator()
+                .item(&MenuItemBuilder::with_id("settings", "Settings").build(&self.app_handle)?)
+                .item(&MenuItemBuilder::with_id("exit", "Exit").build(&self.app_handle)?)
+                .build()?
+        };
         
         // Update the tray menu - get tray by ID
         if let Some(tray) = self.app_handle.tray_by_id(&self.tray_id) {
@@ -339,12 +419,34 @@ impl TrayService {
             menu_builder = menu_builder.item(&menu_item);
         }
         
-        // Add separator and system menu items
-        let menu = menu_builder
-            .separator()
-            .item(&MenuItemBuilder::with_id("settings", "Settings").build(&self.app_handle)?)
-            .item(&MenuItemBuilder::with_id("exit", "Exit").build(&self.app_handle)?)
-            .build()?;
+        // 临时简化菜单，只使用最基本的结构进行测试
+        let menu = if profiles.is_empty() {
+            log::info!("No profiles found, creating simple test menu");
+            MenuBuilder::new(&self.app_handle)
+                .text("no_profiles", "No profiles found")
+                .text("settings", "Settings")
+                .text("exit", "Exit")
+                .build()?
+        } else {
+            log::info!("Profiles found, creating profile menu");
+            let mut menu_builder = MenuBuilder::new(&self.app_handle);
+            
+            // Add profile items using simple text method
+            for (profile, status) in profiles.iter().zip(statuses.iter()) {
+                let menu_text = match status {
+                    ProfileStatus::FullMatch => format!("✅ {}", profile.name),
+                    ProfileStatus::PartialMatch => format!("🔄 {}", profile.name),
+                    ProfileStatus::NoMatch => format!("　  {}", profile.name),
+                    ProfileStatus::Error(_) => format!("❌ {}", profile.name),
+                };
+                menu_builder = menu_builder.text(&format!("profile_{}", profile.name), menu_text);
+            }
+            
+            menu_builder
+                .text("settings", "Settings")
+                .text("exit", "Exit")
+                .build()?
+        };
         
         // Update the tray menu - get tray by ID
         if let Some(tray) = self.app_handle.tray_by_id(&self.tray_id) {
@@ -381,7 +483,7 @@ impl TrayService {
     }
     
     /// Handle tray icon click events with error handling
-    fn handle_tray_event_safe(app_handle: &AppHandle, event: TrayIconEvent) -> AppResult<()> {
+    fn handle_tray_event_safe(app_handle: &AppHandle, _tray: &tauri::tray::TrayIcon<tauri::Wry>, event: TrayIconEvent) -> AppResult<()> {
         match event {
             TrayIconEvent::Click {
                 button: MouseButton::Left,
@@ -389,7 +491,24 @@ impl TrayService {
                 ..
             } => {
                 log::debug!("Tray icon left-clicked");
-                // Could show/hide main window or show profiles menu
+                
+                #[cfg(target_os = "windows")]
+                {
+                    // Windows: 左键点击打开设置窗口
+                    log::info!("Left-click on Windows, opening settings window");
+                    app_handle.emit("tray_icon_hover", ())
+                        .map_err(|e| AppError::TrayError(format!("Failed to emit hover event: {}", e)))?;
+                    app_handle.emit("menu_settings_clicked", ())
+                        .map_err(|e| AppError::TrayError(format!("Failed to emit settings event: {}", e)))?;
+                }
+                
+                #[cfg(not(target_os = "windows"))]
+                {
+                    // Mac/Linux: 左键点击触发配置扫描（如果启用了左键菜单，菜单会自动显示）
+                    app_handle.emit("tray_icon_hover", ())
+                        .map_err(|e| AppError::TrayError(format!("Failed to emit hover event: {}", e)))?;
+                }
+                
                 Ok(())
             }
             TrayIconEvent::DoubleClick {
@@ -397,7 +516,21 @@ impl TrayService {
                 ..
             } => {
                 log::debug!("Tray icon double-clicked");
-                // Could open settings or main window
+                
+                #[cfg(target_os = "windows")]
+                {
+                    // Windows: 双击不做特殊处理，避免与单击冲突
+                    log::debug!("Double-click on Windows, no action");
+                }
+                
+                #[cfg(not(target_os = "windows"))]
+                {
+                    // Mac/Linux: 双击打开设置窗口
+                    log::info!("Double-click on Mac/Linux, opening settings window");
+                    app_handle.emit("menu_settings_clicked", ())
+                        .map_err(|e| AppError::TrayError(format!("Failed to emit settings event: {}", e)))?;
+                }
+                
                 Ok(())
             }
             TrayIconEvent::Enter { .. } => {
@@ -410,12 +543,29 @@ impl TrayService {
             TrayIconEvent::Click {
                 button: MouseButton::Right,
                 button_state: MouseButtonState::Up,
+                position: _,
                 ..
             } => {
                 log::debug!("Tray icon right-clicked");
-                // Right click will show menu - trigger profile scan first
+                
+                // 触发配置文件扫描
                 app_handle.emit("tray_icon_hover", ())
                     .map_err(|e| AppError::TrayError(format!("Failed to emit hover event: {}", e)))?;
+                
+                #[cfg(target_os = "windows")]
+                {
+                    // Windows: 右键点击也打开设置窗口
+                    log::info!("Right-click on Windows, opening settings window");
+                    app_handle.emit("menu_settings_clicked", ())
+                        .map_err(|e| AppError::TrayError(format!("Failed to emit settings event: {}", e)))?;
+                }
+                
+                #[cfg(not(target_os = "windows"))]
+                {
+                    // Mac/Linux: 右键点击会显示菜单（由Tauri自动处理）
+                    log::debug!("Right-click on Mac/Linux, menu should show automatically");
+                }
+                
                 Ok(())
             }
             _ => {
@@ -501,12 +651,21 @@ impl TrayService {
             menu_builder = menu_builder.item(&menu_item);
         }
         
-        // Add separator and system menu items
-        let menu = menu_builder
-            .separator()
-            .item(&MenuItemBuilder::with_id("settings", "Settings").build(&self.app_handle)?)
-            .item(&MenuItemBuilder::with_id("exit", "Exit").build(&self.app_handle)?)
-            .build()?;
+        // Add separator only if there are profiles, then add system menu items
+        let menu = if profiles.is_empty() {
+            // No profiles - just add system menu items without separator
+            menu_builder
+                .item(&MenuItemBuilder::with_id("settings", "Settings").build(&self.app_handle)?)
+                .item(&MenuItemBuilder::with_id("exit", "Exit").build(&self.app_handle)?)
+                .build()?
+        } else {
+            // Has profiles - add separator then system menu items
+            menu_builder
+                .separator()
+                .item(&MenuItemBuilder::with_id("settings", "Settings").build(&self.app_handle)?)
+                .item(&MenuItemBuilder::with_id("exit", "Exit").build(&self.app_handle)?)
+                .build()?
+        };
         
         // Update the tray menu - get tray by ID
         if let Some(tray) = self.app_handle.tray_by_id(&self.tray_id) {
@@ -532,9 +691,40 @@ impl TrayService {
         Ok(())
     }
     
-    /// Get current menu reference
-    pub fn get_current_menu(&self) -> Option<&Menu<tauri::Wry>> {
-        self.current_menu.as_ref()
+    /// Show popup menu at cursor position (Windows workaround)
+    #[cfg(target_os = "windows")]
+    fn show_popup_menu(app_handle: &AppHandle, position: tauri::PhysicalPosition<f64>) -> AppResult<()> {
+        log::info!("Triggering popup menu at position: {:?}", position);
+        
+        // 首先发送一个测试事件来验证事件系统工作
+        if let Err(e) = app_handle.emit("test_event", "Testing event system") {
+            log::error!("Failed to emit test event: {}", e);
+        } else {
+            log::info!("Test event sent successfully");
+        }
+        
+        // 发送事件到前端，让它显示一个弹出菜单
+        app_handle.emit("show_tray_popup_menu", serde_json::json!({
+            "position": {
+                "x": position.x,
+                "y": position.y
+            },
+            "items": [
+                {"id": "no_profiles", "label": "No profiles found", "enabled": false},
+                {"id": "separator", "label": "-"},
+                {"id": "settings", "label": "Settings"},
+                {"id": "exit", "label": "Exit"}
+            ]
+        })).map_err(|e| AppError::TrayError(format!("Failed to emit popup menu event: {}", e)))?;
+        
+        log::info!("Popup menu event sent successfully");
+        Ok(())
+    }
+    
+    /// Show popup menu - no-op on non-Windows platforms
+    #[cfg(not(target_os = "windows"))]
+    fn show_popup_menu(_app_handle: &AppHandle, _position: tauri::PhysicalPosition<f64>) -> AppResult<()> {
+        Ok(())
     }
 }
 

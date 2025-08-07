@@ -41,6 +41,8 @@ const translations = {
     claude_directory_label: "Claude Code directory:",
     profiles_found_label: "Configuration files found:",
     close_button: "Close",
+    minimize_button: "Minimize",
+    exit_button: "Exit",
     saving_settings: "Saving settings...",
 
     // New translations for enhanced UI
@@ -89,7 +91,7 @@ const translations = {
     add_field_button: "Add Field",
     field_name_placeholder: "Enter field name",
     confirm_button: "✓",
-    cancel_button: "✗",
+    cancel_field_button: "✗",
     reset_to_default_button: "Reset to Default",
     save_settings_button: "Save Settings",
     status_icons_description: "Understanding profile comparison results:",
@@ -128,6 +130,8 @@ const translations = {
     claude_directory_label: "Claude Code 目录:",
     profiles_found_label: "发现的配置文件:",
     close_button: "关闭",
+    minimize_button: "最小化",
+    exit_button: "退出",
     saving_settings: "正在保存设置...",
 
     // New translations for enhanced UI
@@ -173,7 +177,7 @@ const translations = {
     add_field_button: "添加字段",
     field_name_placeholder: "输入字段名",
     confirm_button: "✓",
-    cancel_button: "✗",
+    cancel_field_button: "✗",
     reset_to_default_button: "重置为默认",
     save_settings_button: "保存设置",
     status_icons_description: "理解配置比较结果:",
@@ -1394,6 +1398,135 @@ function updateProfilesCount() {
   }
 }
 
+// Show tray popup menu (Windows workaround)
+function showTrayPopupMenu(menuData) {
+  console.log("Showing tray popup menu:", menuData);
+  
+  // Remove any existing tray menu
+  const existingMenu = document.getElementById("tray-popup-menu");
+  if (existingMenu) {
+    existingMenu.remove();
+  }
+  
+  // Create popup menu
+  const menuContainer = document.createElement("div");
+  menuContainer.id = "tray-popup-menu";
+  menuContainer.className = "tray-popup-menu";
+  
+  // Position near cursor (approximate)
+  menuContainer.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 10000;
+    min-width: 200px;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+  `;
+  
+  // Add menu items
+  menuData.items.forEach(item => {
+    if (item.id === "separator") {
+      const separator = document.createElement("div");
+      separator.style.cssText = `
+        height: 1px;
+        background: #e0e0e0;
+        margin: 4px 0;
+      `;
+      menuContainer.appendChild(separator);
+    } else {
+      const menuItem = document.createElement("div");
+      menuItem.className = "tray-menu-item";
+      menuItem.textContent = item.label;
+      
+      // Style menu item
+      menuItem.style.cssText = `
+        padding: 8px 16px;
+        cursor: pointer;
+        transition: background-color 0.1s;
+        ${item.enabled === false ? 'color: #999; cursor: default;' : ''}
+      `;
+      
+      // Add hover effect for enabled items
+      if (item.enabled !== false) {
+        menuItem.addEventListener('mouseenter', () => {
+          menuItem.style.backgroundColor = '#f0f0f0';
+        });
+        
+        menuItem.addEventListener('mouseleave', () => {
+          menuItem.style.backgroundColor = 'transparent';
+        });
+        
+        // Add click handler
+        menuItem.addEventListener('click', () => {
+          handleTrayMenuItemClick(item.id);
+          menuContainer.remove();
+        });
+      }
+      
+      menuContainer.appendChild(menuItem);
+    }
+  });
+  
+  // Add to page
+  document.body.appendChild(menuContainer);
+  
+  // Auto-remove after 5 seconds or on outside click
+  const removeMenu = () => {
+    if (menuContainer.parentNode) {
+      menuContainer.remove();
+    }
+    document.removeEventListener('click', outsideClickHandler);
+  };
+  
+  const outsideClickHandler = (e) => {
+    if (!menuContainer.contains(e.target)) {
+      removeMenu();
+    }
+  };
+  
+  setTimeout(() => {
+    document.addEventListener('click', outsideClickHandler);
+  }, 100);
+  
+  setTimeout(removeMenu, 5000);
+}
+
+// Handle tray menu item clicks
+function handleTrayMenuItemClick(itemId) {
+  console.log("Tray menu item clicked:", itemId);
+  
+  switch (itemId) {
+    case "settings":
+      // Show settings window (current window)
+      console.log("Opening settings...");
+      break;
+      
+    case "exit":
+      // Exit application
+      console.log("Exiting application...");
+      if (invoke) {
+        invoke("exit_application").catch(error => {
+          console.error("Failed to exit application:", error);
+        });
+      }
+      break;
+      
+    default:
+      if (itemId.startsWith("profile_")) {
+        const profileName = itemId.replace("profile_", "");
+        console.log("Switching to profile:", profileName);
+        // TODO: Implement profile switching via backend
+      }
+      break;
+  }
+}
+
 // Initialize application
 function initializeApp() {
   console.log("Initializing enhanced CCCS settings...");
@@ -1417,30 +1550,14 @@ function initializeApp() {
   );
   console.log("Screen size:", window.screen.width, "x", window.screen.height);
 
-  // Set window size programmatically
+  // Log current window size (let Rust code handle sizing)
   if (getCurrentWindow) {
-    // 先获取当前尺寸
     getCurrentWindow()
       .innerSize()
       .then((size) => {
-        console.log("Tauri window size:", size.width, "x", size.height);
-
-        // 尝试设置新尺寸 - 增加宽度以提供更好的桌面应用体验
-        return getCurrentWindow().setSize(
-          size.type === "Physical"
-            ? { type: "Physical", width: 1600, height: 1500 }
-            : { type: "Logical", width: 1600, height: 1500 }
-        );
+        console.log("Current window size:", size.width, "x", size.height);
       })
-      .then(() => {
-        console.log("Window resized to 1600x1500");
-        // 验证是否成功
-        return getCurrentWindow().innerSize();
-      })
-      .then((newSize) => {
-        console.log("New window size:", newSize.width, "x", newSize.height);
-      })
-      .catch((e) => console.log("Window resize failed:", e));
+      .catch((e) => console.log("Failed to get window size:", e));
   }
 
   // Detect and set language
@@ -1493,16 +1610,74 @@ function initializeApp() {
     });
   }
 
-  // Set up close button for About section
-  const closeButton = document.getElementById("close-button");
-  if (closeButton) {
-    closeButton.addEventListener("click", async () => {
+  // Set up window control buttons
+  const minimizeButton = document.getElementById("minimize-button");
+  const exitButton = document.getElementById("exit-button");
+  
+  if (minimizeButton) {
+    minimizeButton.addEventListener("click", async () => {
       try {
-        await invoke("close_settings_window");
+        // 关闭设置窗口，返回托盘运行状态
+        if (getCurrentWindow) {
+          await getCurrentWindow().close();
+        }
       } catch (error) {
         console.error("Failed to close window:", error);
       }
     });
+  }
+  
+  if (exitButton) {
+    exitButton.addEventListener("click", async () => {
+      try {
+        // 退出整个应用程序
+        await invoke("exit_application");
+      } catch (error) {
+        console.error("Failed to exit application:", error);
+        // 如果后端命令失败，尝试直接关闭窗口
+        if (getCurrentWindow) {
+          await getCurrentWindow().close();
+        }
+      }
+    });
+  }
+
+  // Set up tray popup menu listener for Windows
+  console.log("Setting up tray popup menu listener...");
+  console.log("Tauri APIs available:", window.__TAURI__);
+  
+  if (window.__TAURI__ && window.__TAURI__.event) {
+    console.log("Tauri event API available:", window.__TAURI__.event);
+    const { listen } = window.__TAURI__.event;
+    
+    console.log("Setting up event listener for 'show_tray_popup_menu'");
+    
+    // Listen for tray popup menu events from backend
+    listen('show_tray_popup_menu', (event) => {
+      console.log("🎯 Received tray popup menu event:", event);
+      try {
+        showTrayPopupMenu(event.payload);
+      } catch (error) {
+        console.error("Error showing tray popup menu:", error);
+      }
+    }).then(() => {
+      console.log("✅ Tray popup menu listener set up successfully");
+    }).catch(error => {
+      console.error("❌ Failed to set up tray popup menu listener:", error);
+    });
+    
+    // Also listen for test events to verify the system works
+    listen('test_event', (event) => {
+      console.log("🧪 Test event received:", event);
+    }).then(() => {
+      console.log("✅ Test event listener set up successfully");
+    }).catch(error => {
+      console.error("❌ Failed to set up test event listener:", error);
+    });
+    
+  } else {
+    console.error("❌ Tauri event API not available");
+    console.log("Available Tauri APIs:", Object.keys(window.__TAURI__ || {}));
   }
 
   // Update profiles count in About section

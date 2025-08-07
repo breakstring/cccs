@@ -24,7 +24,7 @@ pub type AppResult<T> = Result<T, AppError>;
 use app::App;
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Emitter};
 
 #[derive(Serialize)]
 struct ProfilesInfo {
@@ -349,6 +349,27 @@ async fn close_settings_window(app_handle: tauri::AppHandle) -> Result<(), Strin
     Ok(())
 }
 
+#[tauri::command]
+async fn exit_application(app_handle: tauri::AppHandle) -> Result<(), String> {
+    log::info!("Exit application command called");
+    
+    // Emit cleanup event before exit
+    let _ = app_handle.emit("app_exit_requested", ());
+    
+    // In development mode, try to also terminate the dev server
+    #[cfg(debug_assertions)]
+    {
+        log::info!("Development mode detected, attempting to clean up dev server");
+        // Note: In development, the parent process (npm) should handle cleanup
+        // when the Tauri process exits. If this doesn't work consistently,
+        // users can use Ctrl+C in the terminal to stop both processes.
+    }
+    
+    // Exit the entire application  
+    app_handle.exit(0);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -380,6 +401,7 @@ pub fn run() {
             delete_profile,
             validate_json_content,
             close_settings_window,
+            exit_application,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

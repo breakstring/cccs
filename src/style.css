@@ -1,4 +1,8 @@
-/* CCCS Enhanced Settings Page Styles */
+/* Remove all viewport height dependencies to prevent window jumping */
+
+html {
+    height: 100%;
+}
 
 * {
     margin: 0;
@@ -15,8 +19,10 @@ body {
     overflow: hidden;
     margin: 0;
     padding: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
+    /* Remove all viewport height references */
+    transition: none;
 }
 
 /* Main Container - Left/Right Layout */
@@ -24,9 +30,10 @@ body {
     display: flex !important;
     flex-direction: row !important;
     width: 100% !important;
-    height: 100vh !important;
+    height: 100% !important;
     background: #ffffff;
     overflow: hidden;
+    /* Remove min-height: 100vh to prevent conflicts */
 }
 
 /* Left Navigation Panel */
@@ -224,7 +231,7 @@ body {
     flex: 1 !important;
     width: 100% !important;
     height: auto !important;
-    min-height: 400px !important;
+    min-height: 200px !important;
     border: 1px solid #ced4da;
     border-radius: 8px;
     padding: 16px;

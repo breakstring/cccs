@@ -273,14 +273,69 @@ impl App {
         self.app_handle.listen("open_settings_window", move |_| {
             log::info!("Opening settings window");
 
-            // Check if settings window already exists
+            // Check if settings window already exists and is visible
             if let Some(window) = app_handle_clone2.get_webview_window("settings") {
-                log::info!("Settings window already exists, focusing it");
-                // Window exists, just show and focus it
-                let _ = window.show();
-                let _ = window.set_focus();
-                return;
+                log::info!("Settings window already exists, checking visibility and focusing it");
+                // Try to show and focus the window - if it was closed, this will make it visible again
+                match window.show() {
+                    Ok(_) => {
+                        log::info!("Successfully showed existing settings window");
+                        let _ = window.set_focus();
+                        let _ = window.unminimize(); // In case it was minimized
+                        return;
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to show existing settings window: {}, creating new one", e);
+                        // Continue to create a new window
+                    }
+                }
             }
+
+            // Calculate adaptive window size based on screen resolution with improved cross-platform logic
+            let (window_width, window_height, min_width, min_height) = {
+                // Try to get primary monitor size for adaptive sizing
+                if let Ok(monitors) = app_handle_clone2.primary_monitor() {
+                    if let Some(monitor) = monitors {
+                        let screen_size = monitor.size();
+                        log::info!("Primary monitor size: {}x{}", screen_size.width, screen_size.height);
+                        
+                        // Improved adaptive algorithm:
+                        // - Use absolute sizing with reasonable bounds
+                        // - Consider different screen densities and platforms
+                        let (adaptive_width, adaptive_height) = if screen_size.width >= 1920 {
+                            // High resolution displays (1920x1080+, 4K, Retina)
+                            if screen_size.height >= 1440 {
+                                // 4K or ultrawide displays
+                                (800.0, 900.0)
+                            } else {
+                                // 1920x1080, 2560x1440
+                                (700.0, 800.0) 
+                            }
+                        } else if screen_size.width >= 1366 {
+                            // Medium resolution (1366x768, 1440x900)
+                            (650.0, 750.0)
+                        } else {
+                            // Low resolution or small screens
+                            (600.0, 700.0)
+                        };
+                        
+                        // Set conservative minimum sizes to ensure UI elements fit properly
+                        let min_w = 500.0;
+                        let min_h = 600.0;
+                        
+                        log::info!("Calculated adaptive window size: {}x{} (min: {}x{}) for screen {}x{}", 
+                                 adaptive_width, adaptive_height, min_w, min_h, screen_size.width, screen_size.height);
+                        
+                        (adaptive_width, adaptive_height, min_w, min_h)
+                    } else {
+                        log::warn!("No primary monitor found, using default sizes");
+                        (700.0, 800.0, 500.0, 600.0) // Conservative defaults
+                    }
+                } else {
+                    log::warn!("Failed to get monitor info, using default sizes");
+                    (700.0, 800.0, 500.0, 600.0) // Conservative defaults
+                }
+            };
 
             // Create settings window
             match tauri::WebviewWindowBuilder::new(
@@ -289,10 +344,11 @@ impl App {
                 tauri::WebviewUrl::App("settings.html".into()),
             )
             .title("CCCS Settings")
-            .inner_size(600.0, 750.0)
-            .min_inner_size(500.0, 650.0)
+            .inner_size(window_width, window_height)
+            .min_inner_size(min_width, min_height)
             .center()
             .resizable(true)
+            .visible(false) // Start hidden to prevent flashing
             .on_page_load(|window, _payload| {
                 // Inject initialization script after page loads
                 log::info!("Settings page loaded, injecting init script");
@@ -307,12 +363,20 @@ impl App {
                 if let Err(e) = window.eval(init_script) {
                     log::error!("Failed to inject init script: {}", e);
                 }
+                
+                // Show window after a fixed delay to allow for content loading
+                let window_clone = window.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(300)); // Increased delay
+                    let _ = window_clone.show();
+                    let _ = window_clone.set_focus();
+                });
             })
             .build()
             {
                 Ok(window) => {
                     log::info!("Settings window created successfully");
-                    let _ = window.show();
+                    // Don't call show() here - it will be called after page load
                 }
                 Err(e) => {
                     log::error!("Failed to create settings window: {}", e);
