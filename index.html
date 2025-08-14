@@ -15,7 +15,12 @@
             
             <div class="nav-content">
                 <div class="profile-section">
-                    <h3 data-i18n="profiles_section_title">Profiles</h3>
+                    <div class="profile-section-header">
+                        <h3 data-i18n="profiles_section_title">Profiles</h3>
+                        <button id="add-profile-button" class="add-profile-button" title="New Profile">
+                            <span class="add-icon">+</span>
+                        </button>
+                    </div>
                     <ul id="profile-nav-list" class="profile-nav-list">
                         <!-- Profiles will be dynamically loaded here -->
                     </ul>
@@ -58,8 +63,8 @@
                                 <span class="button-text">Save</span>
                             </button>
                             <button id="apply-profile-button" class="primary-button" data-i18n="apply_profile_button" style="display: none;">
-                                <span class="button-icon">✨</span>
-                                <span class="button-text">Use This Profile</span>
+                                <span class="button-icon">💾✨</span>
+                                <span class="button-text">Save and Apply</span>
                             </button>
                             <button id="save-as-button" class="secondary-button" data-i18n="save_as_button">
                                 <span class="button-icon">📄</span>
@@ -93,6 +98,25 @@
                                     <span class="status-value" id="profiles-count">0</span>
                                 </div>
                             </div>
+                            
+                            <!-- Developer Information -->
+                            <section class="developer-info-section">
+                                <h3 data-i18n="developer_info_title">Developer Information</h3>
+                                <div class="separator"></div>
+                                <div class="developer-content">
+                                    <div class="developer-item">
+                                        <span class="developer-label" data-i18n="project_repository_label">Project Repository:</span>
+                                        <span class="repository-url">https://github.com/breakstring/cccs</span>
+                                    </div>
+                                    <div class="developer-item">
+                                        <span class="developer-label" data-i18n="license_label">License:</span>
+                                        <span class="license-info">
+                                            <span class="license-badge">MIT</span>
+                                            <span class="license-description" data-i18n="license_description">Open source under MIT license</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </section>
                             
                             <!-- Language Settings -->
                             <section class="language-settings-top-section">

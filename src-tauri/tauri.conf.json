@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "CCCS",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "identifier": "com.kzailab.cccs",
   "build": {
     "frontendDist": "../dist",
@@ -26,6 +26,11 @@
       "csp": null
     },
     "withGlobalTauri": true
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
   },
   "bundle": {
     "active": true,

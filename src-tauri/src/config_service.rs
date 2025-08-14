@@ -359,11 +359,6 @@ impl ConfigService {
             }
         };
 
-        // Check for full match first
-        if profile_json == default_json {
-            return ProfileStatus::FullMatch;
-        }
-
         // Use provided ignored fields or get from settings
         let fields_to_ignore = ignored_fields
             .map(|f| f.to_vec())
@@ -371,7 +366,12 @@ impl ConfigService {
 
         // Check if configurations match when ignoring specified fields
         if self.compare_json_ignoring_fields(&profile_json, &default_json, &fields_to_ignore) {
-            return ProfileStatus::PartialMatch;
+            return ProfileStatus::FullMatch;
+        }
+
+        // Check for exact match without ignoring any fields (fallback)
+        if profile_json == default_json {
+            return ProfileStatus::FullMatch;
         }
 
         ProfileStatus::NoMatch
@@ -606,6 +606,103 @@ impl ConfigService {
                 }
 
                 log::info!("Successfully rolled back after failed switch");
+                Err(e)
+            }
+        }
+    }
+
+    /// Apply profile content directly to default settings without reading from file
+    /// This is used when applying content from the editor that may not be saved yet
+    pub fn apply_profile_content(&mut self, content: &str) -> AppResult<()> {
+        log::info!("Applying profile content directly to default settings");
+
+        // Input validation
+        if content.is_empty() {
+            return Err(AppError::ConfigError(
+                "Profile content cannot be empty".to_string(),
+            ));
+        }
+
+        // Validate content before applying
+        match serde_json::from_str::<serde_json::Value>(content) {
+            Ok(_) => {
+                log::debug!("Profile content validation passed");
+            }
+            Err(e) => {
+                return Err(AppError::ConfigError(format!(
+                    "Profile content contains invalid JSON: {}",
+                    e
+                )));
+            }
+        }
+
+        // Pre-flight checks
+        if !self.default_settings_path.exists() {
+            return Err(AppError::FileSystemError(
+                "Default settings file does not exist".to_string(),
+            ));
+        }
+
+        // Check if settings file is writable
+        let test_write_path = self.default_settings_path.with_extension("json.write_test");
+        if let Err(e) = fs::write(&test_write_path, "test") {
+            return Err(AppError::FileSystemError(format!(
+                "Cannot write to settings directory: {}",
+                e
+            )));
+        }
+        let _ = fs::remove_file(&test_write_path);
+
+        // Create backup of current settings with timestamp
+        let timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let backup_path = self
+            .default_settings_path
+            .with_extension(format!("json.backup.{}", timestamp));
+
+        if let Err(e) = self.create_backup(&backup_path) {
+            return Err(AppError::FileSystemError(format!(
+                "Failed to create backup before applying: {}",
+                e
+            )));
+        }
+
+        // Perform atomic switch operation with rollback on failure
+        match self.perform_switch_atomic(content) {
+            Ok(()) => {
+                log::info!("Successfully applied profile content");
+
+                // Clear caches since files have changed
+                self.clear_cache();
+
+                // Update profile status after successful application
+                if let Err(e) = self.refresh_profile_status() {
+                    log::warn!("Failed to refresh profile status after applying: {}", e);
+                    // Don't fail the operation since application was successful
+                }
+
+                // Remove backup file on success (keep only a few recent backups)
+                self.cleanup_old_backups();
+
+                Ok(())
+            }
+            Err(e) => {
+                log::error!("Failed to apply profile content, attempting rollback: {}", e);
+
+                // Attempt to restore from backup
+                if let Err(rollback_err) = self.restore_from_backup(&backup_path) {
+                    log::error!(
+                        "CRITICAL: Failed to rollback after failed application: {}",
+                        rollback_err
+                    );
+                    return Err(AppError::ConfigError(
+                        format!("Profile application failed and rollback failed. Original error: {}. Rollback error: {}", e, rollback_err)
+                    ));
+                }
+
+                log::info!("Successfully rolled back after failed application");
                 Err(e)
             }
         }

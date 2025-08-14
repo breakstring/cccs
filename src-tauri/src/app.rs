@@ -467,6 +467,30 @@ impl App {
     pub fn get_settings_service(&self) -> Arc<Mutex<SettingsService>> {
         Arc::clone(&self.settings_service)
     }
+
+    /// Update tray menu with current profile status
+    pub fn update_tray_menu(&self) -> AppResult<()> {
+        log::info!("Updating tray menu with current profile status");
+        
+        let config_service = Arc::clone(&self.config_service);
+        let tray_service = Arc::clone(&self.tray_service);
+        
+        if let Ok(config) = config_service.lock() {
+            if let Ok(mut tray) = tray_service.lock() {
+                let profiles = config.get_profiles();
+                let statuses = config.compare_profiles();
+                if let Err(e) = tray.update_menu_with_detailed_status(profiles, &statuses) {
+                    log::error!("Failed to update tray menu: {}", e);
+                    return Err(AppError::from(e));
+                }
+                
+                // Emit event to notify frontend
+                let _ = self.app_handle.emit("profiles_changed", ());
+            }
+        }
+        
+        Ok(())
+    }
 }
 
 #[cfg(test)]

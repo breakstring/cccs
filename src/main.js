@@ -54,7 +54,7 @@ const translations = {
     json_editor_hint: "Edit your configuration in JSON format",
     json_editor_placeholder: "Loading configuration...",
     save_button: "Save",
-    apply_profile_button: "Use This Profile",
+    apply_profile_button: "Save and Apply",
     save_as_button: "Save As...",
     delete_button: "Delete Profile",
     save_as_modal_title: "Save As New Profile",
@@ -108,6 +108,19 @@ const translations = {
     field_already_exists: "Field already exists",
     settings_saved: "Settings saved successfully",
     settings_save_error: "Failed to save settings",
+
+    // Add new profile translations
+    new_profile_name_prompt: "Enter profile name:",
+    profile_name_empty: "Profile name cannot be empty",
+    creating_profile: "Creating profile...",
+    profile_created_success: "Profile created successfully!",
+    create_profile_failed: "Failed to create profile",
+
+    // Developer information translations
+    developer_info_title: "Developer Information",
+    project_repository_label: "Project Repository:",
+    license_label: "License:",
+    license_description: "Open source under MIT license",
   },
   zh: {
     // Existing translations
@@ -144,7 +157,7 @@ const translations = {
     json_editor_hint: "以JSON格式编辑您的配置",
     json_editor_placeholder: "正在加载配置...",
     save_button: "保存",
-    apply_profile_button: "使用该配置",
+    apply_profile_button: "保存并应用",
     save_as_button: "另存为...",
     delete_button: "删除配置文件",
     save_as_modal_title: "另存为新的配置文件",
@@ -195,6 +208,19 @@ const translations = {
     field_already_exists: "字段已存在",
     settings_saved: "设置保存成功",
     settings_save_error: "保存设置失败",
+
+    // Add new profile translations
+    new_profile_name_prompt: "请输入配置名称:",
+    profile_name_empty: "配置名称不能为空",
+    creating_profile: "正在创建配置...",
+    profile_created_success: "配置创建成功!",
+    create_profile_failed: "创建配置失败",
+
+    // Developer information translations
+    developer_info_title: "开发者信息",
+    project_repository_label: "项目仓库:",
+    license_label: "授权协议:",
+    license_description: "MIT 协议开源项目",
   },
 };
 
@@ -289,18 +315,54 @@ function showLoading(show, message = null) {
 // Navigation Panel Component
 class NavigationPanel {
   constructor() {
+    console.log("NavigationPanel constructor: Starting initialization");
     this.selectedItem = null;
     this.profileNavList = document.getElementById("profile-nav-list");
     this.settingsNavItem = document.querySelector(".settings-nav-item");
+    this.addProfileButton = document.getElementById("add-profile-button");
+    
+    console.log("NavigationPanel constructor: DOM elements found:");
+    console.log("- profileNavList:", !!this.profileNavList);
+    console.log("- settingsNavItem:", !!this.settingsNavItem);
+    console.log("- addProfileButton:", !!this.addProfileButton);
 
     this.initializeEventListeners();
   }
 
   initializeEventListeners() {
+    console.log("NavigationPanel initializeEventListeners: Starting");
+    
     // Settings navigation click
-    this.settingsNavItem.addEventListener("click", () => {
-      this.handleItemClick("settings");
-    });
+    if (this.settingsNavItem) {
+      this.settingsNavItem.addEventListener("click", () => {
+        this.handleItemClick("settings");
+      });
+      console.log("NavigationPanel: Settings nav event listener added");
+    } else {
+      console.error("NavigationPanel: settingsNavItem not found");
+    }
+
+    // Add profile button click - same pattern as other buttons
+    if (this.addProfileButton) {
+      this.addProfileButton.addEventListener("click", (event) => {
+        console.log("NavigationPanel: Add profile button clicked!");
+        console.log("Click event:", event);
+        this.handleAddProfile();
+      });
+      console.log("NavigationPanel: Add profile button event listener added");
+      
+      // 添加全局测试函数
+      window.testAddButton = () => {
+        console.log("Test function called");
+        this.handleAddProfile();
+      };
+      
+      // 添加额外的调试信息
+      console.log("Add button element:", this.addProfileButton);
+      console.log("Add button style:", window.getComputedStyle(this.addProfileButton));
+    } else {
+      console.error("NavigationPanel: addProfileButton not found! Element ID 'add-profile-button' not in DOM");
+    }
   }
 
   async loadProfiles(shouldAutoSelect = true) {
@@ -482,6 +544,73 @@ class NavigationPanel {
       window.contentEditor.loadProfile(profileId);
     } else {
       console.warn("NavigationPanel.switchToProfile: window.contentEditor not available");
+    }
+  }
+
+  async handleAddProfile() {
+    console.log("handleAddProfile method called");
+    
+    // 默认JSON模板
+    const defaultContent = JSON.stringify({
+      "env": {
+        "ANTHROPIC_AUTH_TOKEN": "",
+        "ANTHROPIC_BASE_URL": ""
+      },
+      "permissions": {
+        "allow": [],
+        "deny": []
+      }
+    }, null, 2);
+
+    // 重用SaveAsModal来获取用户输入
+    if (window.saveAsModal) {
+      // 临时修改SaveAsModal的handleSave方法，让它在保存后切换到新创建的配置
+      const originalHandleSave = window.saveAsModal.handleSave;
+      window.saveAsModal.handleSave = async function() {
+        const profileName = this.profileNameInput.value.trim();
+        if (!profileName) {
+          return;
+        }
+
+        try {
+          showLoading(true, translations[currentLanguage].creating_profile || "Creating profile...");
+
+          const filePath = await invoke("create_new_profile", {
+            profileName,
+            content: defaultContent,
+          });
+
+          this.hide();
+          showToast(translations[currentLanguage].profile_created_success || "Profile created successfully!", "success");
+
+          // 延迟刷新并切换到新配置
+          setTimeout(async () => {
+            if (window.navigationPanel) {
+              try {
+                await window.navigationPanel.loadProfiles(false);
+                // 切换到新创建的配置
+                window.navigationPanel.switchToProfile(profileName);
+              } catch (error) {
+                console.error("Failed to refresh after creating profile:", error);
+              }
+            }
+          }, 300);
+
+        } catch (error) {
+          console.error("Failed to create profile:", error);
+          showToast(`${translations[currentLanguage].create_profile_failed || "Failed to create profile"}: ${error}`, "error");
+        } finally {
+          showLoading(false);
+          // 恢复原始的handleSave方法
+          window.saveAsModal.handleSave = originalHandleSave;
+        }
+      };
+
+      // 显示模态框
+      window.saveAsModal.show(defaultContent);
+    } else {
+      console.error("SaveAsModal not available");
+      showToast("Error: Save modal not available", "error");
     }
   }
 
@@ -835,19 +964,18 @@ class ContentEditor {
         return;
       }
 
-      // 如果有未保存的更改，先保存
-      if (globalState.hasUnsavedChanges) {
-        await invoke("save_profile", {
-          profileId: globalState.currentProfile,
-          content: this.currentContent,
-        });
-        this.originalContent = this.currentContent;
-        globalState.hasUnsavedChanges = false;
-      }
+      // 先保存当前配置文件
+      await invoke("save_profile", {
+        profileId: globalState.currentProfile,
+        content: this.currentContent,
+      });
+      this.originalContent = this.currentContent;
+      globalState.hasUnsavedChanges = false;
 
-      // 应用配置文件
+      // 再应用配置文件（直接使用当前编辑器的内容）
       await invoke("apply_profile", {
         profileId: globalState.currentProfile,
+        content: this.currentContent,
       });
 
       showToast("Profile applied successfully!", "success");
@@ -1776,6 +1904,24 @@ function initializeApp() {
   updateProfilesCount();
 
   console.log("Enhanced CCCS settings initialized successfully");
+}
+
+// Function to open external links in default browser
+async function openExternalLink(url) {
+  try {
+    console.log("Opening external link:", url);
+    if (window.__TAURI__) {
+      // Use Tauri shell API to open external links
+      await window.__TAURI__.shell.open(url);
+    } else {
+      // Fallback for development
+      window.open(url, '_blank');
+    }
+  } catch (error) {
+    console.error("Failed to open external link:", error);
+    // Show user-friendly error message
+    showToast("Failed to open link. Please copy the URL manually.", "error");
+  }
 }
 
 // Start the application when DOM is ready

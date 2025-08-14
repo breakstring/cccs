@@ -16,6 +16,8 @@
     "core:window:allow-inner-size",
     "core:webview:default",
     "fs:default",
-    "dialog:default"
+    "dialog:default",
+    "shell:default",
+    "shell:allow-open"
   ]
 }

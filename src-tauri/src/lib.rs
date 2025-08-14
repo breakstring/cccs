@@ -257,9 +257,19 @@ async fn create_new_profile(
         }
     };
 
-    match config.create_profile(&profile_name, &content) {
+    let result = config.create_profile(&profile_name, &content);
+    drop(config); // 释放锁，避免死锁
+    
+    match result {
         Ok(path) => {
             log::info!("Successfully created profile: {} at {}", profile_name, path);
+            
+            // Update tray menu to show the new profile
+            if let Err(e) = app.update_tray_menu() {
+                log::warn!("Failed to update tray menu after creating profile: {}", e);
+                // Don't fail the operation since profile creation was successful
+            }
+            
             Ok(path)
         }
         Err(e) => {
@@ -344,9 +354,10 @@ async fn validate_json_content(
 #[tauri::command]
 async fn apply_profile(
     profile_id: String,
+    content: String,
     app_state: tauri::State<'_, Arc<Mutex<App>>>,
 ) -> Result<(), String> {
-    log::info!("apply_profile called for profile: {}", profile_id);
+    log::info!("apply_profile called for profile: {} with content length: {}", profile_id, content.len());
 
     let app = match app_state.try_lock() {
         Ok(guard) => guard,
@@ -365,21 +376,24 @@ async fn apply_profile(
         }
     };
 
-    // Apply the profile (this will copy profile content to default settings.json)
-    match config.switch_profile(&profile_id) {
+    // Apply the profile content directly (this will copy the provided content to default settings.json)
+    let result = config.apply_profile_content(&content);
+    drop(config); // 释放锁，避免死锁
+    
+    match result {
         Ok(()) => {
-            log::info!("Successfully applied profile: {}", profile_id);
+            log::info!("Successfully applied profile content from: {}", profile_id);
             
-            // Force refresh profiles to update status
-            if let Err(e) = config.refresh_profile_status() {
-                log::warn!("Failed to refresh profiles after applying: {}", e);
-                // Don't return error as the profile was successfully applied
+            // Update tray menu to reflect the new active profile status
+            if let Err(e) = app.update_tray_menu() {
+                log::warn!("Failed to update tray menu after applying profile: {}", e);
+                // Don't fail the operation since profile application was successful
             }
             
             Ok(())
         }
         Err(e) => {
-            log::error!("Failed to apply profile '{}': {}", profile_id, e);
+            log::error!("Failed to apply profile content from '{}': {}", profile_id, e);
             Err(format!("Failed to apply profile: {}", e))
         }
     }
@@ -420,6 +434,7 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init())
         .setup(setup_app)
         .invoke_handler(tauri::generate_handler![
             settings_service::get_settings,
