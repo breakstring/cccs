@@ -121,6 +121,13 @@ const translations = {
     project_repository_label: "Project Repository:",
     license_label: "License:",
     license_description: "Open source under MIT license",
+
+    // Theme settings
+    theme_settings_title: "Theme Settings",
+    interface_theme_label: "Interface theme:",
+    follow_system_theme: "Follow system",
+    light_theme: "Light",
+    dark_theme: "Dark",
   },
   zh: {
     // Existing translations
@@ -221,12 +228,70 @@ const translations = {
     project_repository_label: "项目仓库:",
     license_label: "授权协议:",
     license_description: "MIT 协议开源项目",
+
+    // Theme settings
+    theme_settings_title: "主题设置",
+    interface_theme_label: "界面主题:",
+    follow_system_theme: "跟随系统",
+    light_theme: "浅色模式",
+    dark_theme: "深色模式",
   },
 };
 
 let currentLanguage = "en";
+let currentTheme = "";  // "", "light", "dark"
 
 // Utility functions
+function detectSystemTheme() {
+  // Check if system supports dark mode
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return "dark";
+  } else {
+    return "light";
+  }
+}
+
+function applyTheme(theme) {
+  const htmlElement = document.documentElement;
+  
+  // Remove existing theme classes
+  htmlElement.classList.remove('theme-light', 'theme-dark');
+  
+  // Apply theme
+  if (theme === "dark") {
+    htmlElement.classList.add('theme-dark');
+  } else if (theme === "light") {
+    htmlElement.classList.add('theme-light');
+  } else {
+    // Follow system theme
+    const systemTheme = detectSystemTheme();
+    htmlElement.classList.add(`theme-${systemTheme}`);
+  }
+  
+  currentTheme = theme;
+  
+  // Save theme preference
+  try {
+    localStorage.setItem('cccs-theme', theme);
+  } catch (error) {
+    console.warn('Failed to save theme preference:', error);
+  }
+  
+  console.log(`Applied theme: ${theme || 'system'}`);
+}
+
+function loadSavedTheme() {
+  try {
+    const savedTheme = localStorage.getItem('cccs-theme');
+    if (savedTheme !== null) {
+      return savedTheme;
+    }
+  } catch (error) {
+    console.warn('Failed to load saved theme:', error);
+  }
+  return "";  // Default to system theme
+}
+
 function detectSystemLanguage() {
   // Get user's preferred languages in order
   const languages = navigator.languages || [navigator.language || navigator.userLanguage || 'en'];
@@ -1784,6 +1849,10 @@ function initializeApp() {
   currentLanguage = detectSystemLanguage();
   updateTexts();
 
+  // Load saved theme or detect system theme
+  const savedTheme = loadSavedTheme();
+  applyTheme(savedTheme);
+
   // Initialize components
   window.navigationPanel = new NavigationPanel();
   window.contentEditor = new ContentEditor();
@@ -1827,6 +1896,33 @@ function initializeApp() {
       }
       updateTexts();
       // Optionally save language preference here
+    });
+  }
+
+  // Set up theme selector
+  const themeSelect = document.getElementById("theme-select");
+  if (themeSelect) {
+    // Set the current value based on saved theme
+    themeSelect.value = currentTheme;
+    
+    themeSelect.addEventListener("change", (e) => {
+      const selectedTheme = e.target.value;
+      applyTheme(selectedTheme);
+    });
+  }
+
+  // Listen for system theme changes
+  if (window.matchMedia) {
+    const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    darkModeMediaQuery.addEventListener('change', (e) => {
+      // Only update if user is following system theme
+      if (currentTheme === "") {
+        const systemTheme = e.matches ? "dark" : "light";
+        const htmlElement = document.documentElement;
+        htmlElement.classList.remove('theme-light', 'theme-dark');
+        htmlElement.classList.add(`theme-${systemTheme}`);
+        console.log(`System theme changed to: ${systemTheme}`);
+      }
     });
   }
 
