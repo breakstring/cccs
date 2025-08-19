@@ -835,6 +835,538 @@ body {
     }
 }
 
+/* ===== DARK THEME STYLES ===== */
+
+/* Dark theme root variables */
+:root.theme-dark {
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #2d2d2d;
+    --bg-tertiary: #3a3a3a;
+    --bg-accent: #404040;
+    --text-primary: #ffffff;
+    --text-secondary: #b8b8b8;
+    --text-muted: #888888;
+    --border-color: #404040;
+    --border-light: #4a4a4a;
+    --shadow-color: rgba(0, 0, 0, 0.5);
+    --input-bg: #2d2d2d;
+    --input-border: #4a4a4a;
+    --button-bg: #3a3a3a;
+    --success-color: #4ade80;
+    --danger-color: #f87171;
+    --warning-color: #fbbf24;
+    --info-color: #60a5fa;
+}
+
+/* Light theme root variables for consistency */
+:root.theme-light {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-tertiary: #e9ecef;
+    --bg-accent: #f5f5f5;
+    --text-primary: #212529;
+    --text-secondary: #495057;
+    --text-muted: #6c757d;
+    --border-color: #e9ecef;
+    --border-light: #dee2e6;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
+    --button-bg: #ffffff;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+}
+
+/* Force dark theme for all main elements */
+.theme-dark,
+.theme-dark * {
+    border-color: var(--border-color);
+}
+
+/* Override any remaining light backgrounds with highest specificity */
+html.theme-dark,
+html.theme-dark body,
+html.theme-dark .main-container,
+html.theme-dark .content-panel,
+html.theme-dark .content-area,
+html.theme-dark .content-view,
+html.theme-dark .view-content,
+html.theme-dark .view-footer,
+html.theme-dark .editor-main,
+html.theme-dark #json-editor-view,
+html.theme-dark #json-editor-view .view-content,
+html.theme-dark #json-editor-view .view-footer,
+html.theme-dark #json-editor-view .editor-main {
+    background: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Force dark theme JSON editor */
+html.theme-dark #json-editor,
+html.theme-dark .json-editor,
+html.theme-dark #json-editor-view .json-editor {
+    background: var(--input-bg) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--input-border) !important;
+}
+
+html.theme-dark #json-editor:focus,
+html.theme-dark .json-editor:focus,
+html.theme-dark #json-editor-view .json-editor:focus {
+    background: var(--input-bg) !important;
+    border-color: #4c5a85 !important;
+    box-shadow: 0 0 0 3px rgba(76, 90, 133, 0.2) !important;
+}
+
+/* Apply dark theme styles */
+html.theme-dark body {
+    background-color: var(--bg-accent) !important;
+    color: var(--text-primary) !important;
+}
+
+html.theme-dark .main-container {
+    background: var(--bg-primary) !important;
+}
+
+/* Navigation Panel Dark Theme */
+.theme-dark .navigation-panel {
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+}
+
+.theme-dark .nav-header {
+    background: linear-gradient(135deg, #4c5a85 0%, #5a4a75 100%);
+}
+
+.theme-dark .nav-item {
+    color: var(--text-secondary);
+}
+
+.theme-dark .nav-item:hover {
+    background: var(--bg-accent);
+    color: var(--text-primary);
+}
+
+.theme-dark .nav-item.active {
+    background: #4c5a85;
+    color: white;
+}
+
+.theme-dark .nav-item.current-profile {
+    background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
+}
+
+.theme-dark .nav-item.current-profile:hover {
+    background: linear-gradient(135deg, #047857 0%, #0f766e 100%);
+}
+
+.theme-dark .nav-item.current-profile.active {
+    background: linear-gradient(135deg, #065f46 0%, #134e4a 100%);
+}
+
+.theme-dark .add-profile-button {
+    background: var(--button-bg);
+    border: 1px solid var(--border-light);
+    color: var(--text-secondary);
+}
+
+.theme-dark .add-profile-button:hover {
+    background: var(--bg-accent);
+    border-color: #4c5a85;
+}
+
+.theme-dark .add-icon {
+    color: var(--text-secondary);
+}
+
+.theme-dark .add-profile-button:hover .add-icon {
+    color: #4c5a85;
+}
+
+.theme-dark .nav-footer {
+    border-top: 1px solid var(--border-color);
+}
+
+/* Content Panel Dark Theme */
+.theme-dark .content-panel {
+    background: var(--bg-primary);
+}
+
+.theme-dark .content-header {
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.theme-dark .content-header h2 {
+    color: var(--text-primary);
+}
+
+/* Content Area Dark Theme */
+.theme-dark .content-area {
+    background: var(--bg-primary);
+}
+
+.theme-dark .content-view {
+    background: var(--bg-primary);
+}
+
+.theme-dark .view-content {
+    background: var(--bg-primary);
+}
+
+.theme-dark .view-footer {
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-color);
+}
+
+.theme-dark .editor-main {
+    background: var(--bg-primary);
+}
+
+/* JSON Editor Dark Theme */
+.theme-dark .json-editor {
+    background: var(--input-bg) !important;
+    border: 1px solid var(--input-border) !important;
+    color: var(--text-primary) !important;
+}
+
+.theme-dark .json-editor:focus {
+    border-color: #4c5a85 !important;
+    box-shadow: 0 0 0 3px rgba(76, 90, 133, 0.2) !important;
+    background: var(--input-bg) !important;
+}
+
+.theme-dark .editor-title {
+    color: var(--text-primary);
+}
+
+.theme-dark .editor-hint {
+    color: var(--text-muted);
+}
+
+/* Editor Controls Dark Theme */
+.theme-dark .editor-controls {
+    background: var(--bg-primary);
+}
+
+/* Specific selector for JSON editor view */
+.theme-dark #json-editor-view {
+    background: var(--bg-primary);
+}
+
+.theme-dark #json-editor-view .json-editor {
+    background: var(--input-bg) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--input-border) !important;
+}
+
+.theme-dark #json-editor-view .json-editor:focus {
+    background: var(--input-bg) !important;
+    border-color: #4c5a85 !important;
+    box-shadow: 0 0 0 3px rgba(76, 90, 133, 0.2) !important;
+}
+
+/* Buttons Dark Theme */
+.theme-dark .primary-button {
+    background: linear-gradient(135deg, #4c5a85 0%, #5a4a75 100%);
+}
+
+.theme-dark .primary-button:hover:not(:disabled) {
+    box-shadow: 0 4px 12px rgba(76, 90, 133, 0.4);
+}
+
+.theme-dark .secondary-button {
+    background: var(--button-bg);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-light);
+}
+
+.theme-dark .secondary-button:hover:not(:disabled) {
+    background: var(--bg-accent);
+    border-color: var(--border-color);
+}
+
+.theme-dark .danger-button {
+    background: var(--danger-color);
+    border: 1px solid var(--danger-color);
+}
+
+.theme-dark .danger-button:hover:not(:disabled) {
+    background: #ef4444;
+    border-color: #ef4444;
+}
+
+/* Settings View Dark Theme */
+.theme-dark .settings-top-section {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.theme-dark .app-info-section h2,
+.theme-dark .developer-info-section h3,
+.theme-dark .language-settings-top-section h3,
+.theme-dark .theme-settings-top-section h3 {
+    color: var(--text-primary);
+}
+
+.theme-dark .app-info-section p {
+    color: var(--text-secondary);
+}
+
+.theme-dark .separator {
+    background: var(--border-color);
+}
+
+.theme-dark .status-items .status-item {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.theme-dark .status-items .status-label {
+    color: var(--text-secondary);
+}
+
+.theme-dark .status-items .status-value {
+    color: var(--text-primary);
+}
+
+.theme-dark .settings-middle-section {
+    background: var(--bg-primary);
+}
+
+.theme-dark .settings-left-panel,
+.theme-dark .settings-right-panel {
+    background: var(--bg-primary);
+}
+
+.theme-dark .field-exclusion-section h3,
+.theme-dark .status-icons-section h3 {
+    color: var(--text-primary);
+}
+
+.theme-dark .section-description {
+    color: var(--text-secondary);
+}
+
+.theme-dark .field-list-header label {
+    color: var(--text-secondary);
+}
+
+.theme-dark .ignored-fields-list {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.theme-dark .field-item {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+}
+
+.theme-dark .field-item:hover {
+    border-color: var(--border-light);
+    box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+.theme-dark .field-name {
+    color: var(--text-secondary);
+}
+
+.theme-dark .empty-state {
+    color: var(--text-muted);
+}
+
+.theme-dark .new-field-input {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--text-primary);
+}
+
+.theme-dark .new-field-input:focus {
+    border-color: #4c5a85;
+    box-shadow: 0 0 0 3px rgba(76, 90, 133, 0.2);
+}
+
+.theme-dark .field-input-container {
+    background: rgba(76, 90, 133, 0.1);
+    border: 1px solid rgba(76, 90, 133, 0.2);
+}
+
+.theme-dark .status-icon-list .status-text {
+    color: var(--text-secondary);
+}
+
+.theme-dark .settings-bottom-section {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+}
+
+/* Modal Dark Theme */
+.theme-dark .modal-overlay {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.theme-dark .modal-content {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+}
+
+.theme-dark .modal-header {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.theme-dark .modal-header h3 {
+    color: var(--text-primary);
+}
+
+.theme-dark .modal-close-button {
+    color: var(--text-muted);
+}
+
+.theme-dark .modal-close-button:hover {
+    background: var(--bg-accent);
+    color: var(--text-secondary);
+}
+
+.theme-dark .modal-footer {
+    border-top: 1px solid var(--border-color);
+}
+
+.theme-dark .form-group label {
+    color: var(--text-primary);
+}
+
+.theme-dark .profile-name-input {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--text-primary);
+}
+
+.theme-dark .profile-name-input:focus {
+    border-color: #4c5a85;
+    box-shadow: 0 0 0 3px rgba(76, 90, 133, 0.2);
+}
+
+.theme-dark .input-hint {
+    color: var(--text-muted);
+}
+
+.theme-dark .filename-preview {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.theme-dark .error-message {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--danger-color);
+}
+
+/* Toast Dark Theme */
+.theme-dark .toast {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.theme-dark .toast-success {
+    border-left: 4px solid var(--success-color);
+    background: rgba(74, 222, 128, 0.1);
+}
+
+.theme-dark .toast-error {
+    border-left: 4px solid var(--danger-color);
+    background: rgba(248, 113, 113, 0.1);
+}
+
+.theme-dark .toast-info {
+    border-left: 4px solid var(--info-color);
+    background: rgba(96, 165, 250, 0.1);
+}
+
+/* Loading Dark Theme */
+.theme-dark .loading-overlay {
+    background: rgba(26, 26, 26, 0.9);
+}
+
+.theme-dark .loading-spinner {
+    border: 3px solid var(--border-color);
+    border-top: 3px solid #4c5a85;
+}
+
+.theme-dark .loading-text {
+    color: var(--text-secondary);
+}
+
+/* Form Controls Dark Theme */
+.theme-dark .setting-item label {
+    color: var(--text-primary);
+}
+
+.theme-dark .setting-item select {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--text-primary);
+}
+
+.theme-dark .setting-item select:focus {
+    border-color: #4c5a85;
+    box-shadow: 0 0 0 3px rgba(76, 90, 133, 0.2);
+}
+
+.theme-dark .language-settings-top-section select,
+.theme-dark .theme-settings-top-section select {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--text-primary);
+}
+
+.theme-dark .language-settings-top-section select:focus,
+.theme-dark .theme-settings-top-section select:focus {
+    border-color: #4c5a85;
+    box-shadow: 0 0 0 3px rgba(76, 90, 133, 0.2);
+}
+
+.theme-dark .language-settings-top-section label,
+.theme-dark .theme-settings-top-section label {
+    color: var(--text-secondary);
+}
+
+/* Developer Info Dark Theme */
+.theme-dark .developer-info-section {
+    border-top: 1px solid var(--border-color);
+}
+
+.theme-dark .developer-label {
+    color: var(--text-secondary);
+}
+
+.theme-dark .repository-url {
+    color: #60a5fa;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.theme-dark .license-badge {
+    background: linear-gradient(135deg, var(--success-color) 0%, #10b981 100%);
+}
+
+.theme-dark .license-description {
+    color: var(--text-muted);
+}
+
+/* Responsive adjustments for dark theme */
+@media (max-width: 480px) {
+    .theme-dark .navigation-panel {
+        background: var(--bg-secondary);
+    }
+    
+    .theme-dark .content-header {
+        background: var(--bg-primary);
+    }
+}
+
 /* ===== NEW STRUCTURE STYLES ===== */
 /* Content Views - Replaces old editor-container and about-container */
 .content-view {
